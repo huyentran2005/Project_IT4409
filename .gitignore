@@ -1,0 +1,106 @@
+# ==========================================
+# Python / FastAPI
+# ==========================================
+
+# Virtual environment
+.venv/
+venv/
+env/
+ENV/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyright/
+
+# Python build
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# ==========================================
+# React / Vite / TypeScript
+# ==========================================
+
+# Dependencies
+node_modules/
+
+# Build output
+frontend/dist/
+frontend/build/
+
+# Vite cache
+.vite/
+*.tsbuildinfo
+
+# Testing
+coverage/
+
+# ==========================================
+# Environment / Secrets
+# ==========================================
+
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Private keys
+*.pem
+*.key
+
+# ==========================================
+# Docker
+# ==========================================
+
+docker-compose.override.yml
+compose.override.yaml
+
+# Local persistent data (if bind-mounted)
+postgres_data/
+minio_data/
+
+# ==========================================
+# IDE / Editor
+# ==========================================
+
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# ==========================================
+# OS
+# ==========================================
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ==========================================
+# Logs / Temporary files
+# ==========================================
+
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.bak
+
+# ==========================================
+# Local uploads
+# ==========================================
+
+uploads/
