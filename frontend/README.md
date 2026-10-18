@@ -1,75 +1,56 @@
-# React + TypeScript + Vite
+# TaskFlow Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Frontend quản lý dự án và công việc viết bằng React, TypeScript và Vite. Phiên bản này không có khái niệm Workspace; toàn bộ board, thành viên và phân quyền thuộc trực tiếp về Project.
 
-Currently, two official plugins are available:
+## Chạy local
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+Mặc định giao diện dùng dữ liệu mẫu. Sao chép `.env.example` thành `.env` và đặt `VITE_USE_MOCKS=false` để gọi FastAPI thật tại `VITE_API_URL`.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Cấu trúc
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```text
+src/
+├── components/       # Component layout, board, task và UI dùng lại
+├── data/mockData.ts  # Nguồn duy nhất chứa toàn bộ dữ liệu giả lập
+├── hooks/            # State và nghiệp vụ giao diện
+├── pages/            # Thành phần cấp trang
+├── services/         # Toàn bộ lời gọi HTTP tới backend
+├── types/            # TypeScript domain models
+├── App.tsx
+└── App.css
+```
 
+Các endpoint frontend đang chuẩn bị để sử dụng:
+
+- `POST /api/auth/login`
+- `POST /api/auth/register`
+- `GET /api/auth/sso/google`
+- `GET /api/auth/sso/github`
+- `POST /api/auth/logout`
+- `GET /api/projects/:projectId/board`
+- `POST /api/projects/:projectId/tasks`
+- `PATCH /api/tasks/:taskId`
+- `PATCH /api/tasks/:taskId/move`
+- `GET /api/tasks/:taskId/timesheets`
+- `POST /api/tasks/:taskId/timesheets`
+- `GET /api/projects/:projectId/members`
+- `GET /api/projects/:projectId/documents`
+- `GET /api/projects/:projectId/meetings`
+- `POST /api/projects/:projectId/meetings`
+- `GET /api/projects/:projectId/activity-logs`
+- `GET /api/tasks/:taskId/comments`
+- `POST /api/tasks/:taskId/comments`
+- `PUT /api/projects/:projectId/role-permissions`
+- `PATCH /api/projects/:projectId/members/:userId/role`
+
+## Kiểm tra
+
+```bash
+npm run lint
+npm run build
 ```
