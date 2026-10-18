@@ -1,6 +1,6 @@
 # TaskFlow Frontend
 
-Frontend quản lý dự án và công việc viết bằng React, TypeScript và Vite. Phiên bản này không có khái niệm Workspace; toàn bộ board, thành viên và phân quyền thuộc trực tiếp về Project.
+
 
 ## Chạy local
 
