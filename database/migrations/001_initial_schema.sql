@@ -1,6 +1,3 @@
--- Initial schema from docs/database-design.md (2026-10-18).
--- Apply through database/migrate.sql; include paths are relative to this file.
--- Keep dependency order: accounts/projects, tasks, related tables, triggers, indexes.
 
 \ir ../accounts_and_projects.sql
 \ir ../workflow_sprints_and_tasks.sql
