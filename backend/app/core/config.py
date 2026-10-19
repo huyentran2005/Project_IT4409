@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/auth/sso/google/callback"
     FRONTEND_URL: str = "http://localhost:5173"
 
+    # GitHub SSO OAuth 2.0
+    GITHUB_CLIENT_ID: str = ""
+    GITHUB_CLIENT_SECRET: str = ""
+    GITHUB_REDIRECT_URI: str = "http://localhost:8000/api/auth/sso/github/callback"
+
     # JWT Security
     JWT_SECRET_KEY: str = "taskflow_super_secret_jwt_key_it4409_2026"
     JWT_ALGORITHM: str = "HS256"

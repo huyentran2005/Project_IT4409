@@ -13,7 +13,12 @@ from app.services.google_oauth import (
     exchange_google_code,
     get_google_user_info,
 )
-from app.services.auth_service import handle_google_login
+from app.services.github_oauth import (
+    get_github_auth_url,
+    exchange_github_code,
+    get_github_user_info,
+)
+from app.services.auth_service import handle_google_login, handle_github_login
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -103,6 +108,114 @@ async def sso_google_callback(
         access_token, refresh_token, user = handle_google_login(
             db=db,
             google_user_info=google_user_info,
+            client_ip=client_ip,
+            user_agent=user_agent,
+        )
+
+        # 6. Điều hướng về Frontend kèm Access Token
+        redirect_url = (
+            f"{settings.FRONTEND_URL}/auth/callback"
+            f"?token={urllib.parse.quote(access_token)}"
+            f"&refresh_token={urllib.parse.quote(refresh_token)}"
+        )
+        res = RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+        res.delete_cookie(key="oauth_state")
+        return res
+
+    except Exception as exc:
+        error_msg = urllib.parse.quote(str(exc))
+        error_url = f"{settings.FRONTEND_URL}?error={error_msg}"
+        return RedirectResponse(url=error_url, status_code=status.HTTP_302_FOUND)
+
+
+@router.get("/sso/github")
+def sso_github_redirect(response: Response):
+    """
+    Khởi tạo phiên đăng nhập GitHub SSO và chuyển hướng người dùng sang GitHub.
+
+    Input (Đầu vào):
+        - Không yêu cầu tham số truyền vào từ client.
+
+    Output (Đầu ra):
+        - 302 Found (Redirect): Chuyển hướng trình duyệt tới màn hình ủy quyền GitHub (github.com/login/oauth/authorize).
+        - Set-Cookie: `oauth_state` lưu mã ngẫu nhiên (max-age 10 phút, HttpOnly, SameSite=Lax) để phòng chống CSRF.
+    """
+    state = secrets.token_urlsafe(32)
+    redirect_url = get_github_auth_url(state)
+
+    res = RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+    res.set_cookie(
+        key="oauth_state",
+        value=state,
+        max_age=600,
+        httponly=True,
+        samesite="lax",
+    )
+    return res
+
+
+@router.get("/sso/github/callback")
+async def sso_github_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    error_description: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Tiếp nhận mã authorization code từ GitHub sau khi người dùng xác thực và ủy quyền.
+
+    Input (Đầu vào):
+        - code (str, query param): Mã ủy quyền do GitHub trả về để đổi lấy Access Token.
+        - state (str, query param): Chuỗi bảo mật ngẫu nhiên để xác thực phiên chống CSRF.
+        - error (str, optional query param): Thông báo lỗi nếu người dùng hủy hoặc GitHub từ chối (vd: access_denied).
+        - Cookie: `oauth_state` chứa mã state đã lưu ở bước khởi tạo.
+        - Database Session: Kết nối PostgreSQL để tra cứu và lưu trữ tài khoản.
+
+    Output (Đầu ra):
+        - 302 Found (Redirect):
+            + Thành công: Điều hướng về Frontend kèm token xác thực:
+              `${FRONTEND_URL}/auth/callback?token={access_token}&refresh_token={refresh_token}`
+            + Thất bại: Điều hướng về Frontend kèm thông tin lỗi:
+              `${FRONTEND_URL}?error={error_message}`
+        - Xóa Cookie: `oauth_state` sau khi hoàn tất xác thực.
+    """
+    # 1. Người dùng bấm Cancel hoặc GitHub báo lỗi
+    if error:
+        err_detail = error_description or error
+        error_url = f"{settings.FRONTEND_URL}?error={urllib.parse.quote(err_detail)}"
+        return RedirectResponse(url=error_url, status_code=status.HTTP_302_FOUND)
+
+    if not code:
+        error_url = f"{settings.FRONTEND_URL}?error=missing_code"
+        return RedirectResponse(url=error_url, status_code=status.HTTP_302_FOUND)
+
+    # 2. Kiểm tra mã state chống tấn công CSRF
+    saved_state = request.cookies.get("oauth_state")
+    if saved_state and state and saved_state != state:
+        error_url = f"{settings.FRONTEND_URL}?error=invalid_state"
+        return RedirectResponse(url=error_url, status_code=status.HTTP_302_FOUND)
+
+    try:
+        # 3. Đổi authorization code lấy access token của GitHub
+        token_data = await exchange_github_code(code)
+        github_access_token = token_data.get("access_token")
+        if not github_access_token:
+            err_msg = token_data.get("error_description") or token_data.get("error") or "failed_to_retrieve_github_token"
+            error_url = f"{settings.FRONTEND_URL}?error={urllib.parse.quote(err_msg)}"
+            return RedirectResponse(url=error_url, status_code=status.HTTP_302_FOUND)
+
+        # 4. Lấy thông tin người dùng từ GitHub (đã xử lý bóc tách email private)
+        github_user_info = await get_github_user_info(github_access_token)
+
+        # 5. Xử lý lưu / liên kết tài khoản trong Database
+        client_ip = request.client.host if request.client else None
+        user_agent = request.headers.get("user-agent")
+
+        access_token, refresh_token, user = handle_github_login(
+            db=db,
+            github_user_info=github_user_info,
             client_ip=client_ip,
             user_agent=user_agent,
         )
