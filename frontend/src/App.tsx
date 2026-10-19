@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+
 import './styles/index.css'
 import { AppSidebar } from './components/layout/AppSidebar'
 import { TopBar } from './components/layout/TopBar'
@@ -66,14 +67,43 @@ function App() {
     finishAuthentication()
   }
 
-  const authenticateWithSso = (provider: SsoProvider) => {
-    if (useMocks) {
-      localStorage.setItem('taskflow-current-user', JSON.stringify(currentUser))
-      finishAuthentication()
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const token = params.get('token')
+    const refreshToken = params.get('refresh_token')
+    const error = params.get('error')
+
+    if (error) {
+      alert(`Đăng nhập thất bại: ${decodeURIComponent(error)}`)
+      window.history.replaceState({}, '', '/')
       return
     }
+
+    if (token) {
+      localStorage.setItem('taskflow-token', token)
+      if (refreshToken) {
+        localStorage.setItem('taskflow-refresh-token', refreshToken)
+      }
+
+      authApi
+        .getMe(token)
+        .then((user) => {
+          localStorage.setItem('taskflow-current-user', JSON.stringify(user))
+          finishAuthentication()
+        })
+        .catch(() => {
+          finishAuthentication()
+        })
+        .finally(() => {
+          window.history.replaceState({}, '', '/')
+        })
+    }
+  }, [])
+
+  const authenticateWithSso = (provider: SsoProvider) => {
     window.location.assign(authApi.getSsoUrl(provider))
   }
+
 
   const logout = () => {
     if (!useMocks) void authApi.logout().catch(() => undefined)

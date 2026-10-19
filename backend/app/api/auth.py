@@ -20,7 +20,16 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.get("/sso/google")
 def sso_google_redirect(response: Response):
-    """Khởi tạo phiên đăng nhập Google SSO và chuyển hướng người dùng."""
+    """
+    Khởi tạo phiên đăng nhập Google SSO và chuyển hướng người dùng sang Google.
+
+    Input (Đầu vào):
+        - Không yêu cầu tham số truyền vào từ client.
+
+    Output (Đầu ra):
+        - 302 Found (Redirect): Chuyển hướng trình duyệt tới màn hình đăng nhập Google (accounts.google.com).
+        - Set-Cookie: `oauth_state` lưu mã ngẫu nhiên (max-age 10 phút, HttpOnly, SameSite=Lax) để phòng chống tấn công CSRF.
+    """
     state = secrets.token_urlsafe(32)
     redirect_url = get_google_auth_url(state)
 
@@ -43,7 +52,24 @@ async def sso_google_callback(
     error: str | None = None,
     db: Session = Depends(get_db),
 ):
-    """Tiếp nhận callback từ Google sau khi người dùng xác thực và cấp quyền."""
+    """
+    Tiếp nhận mã authorization code từ Google sau khi người dùng xác thực và cấp quyền.
+
+    Input (Đầu vào):
+        - code (str, query param): Mã ủy quyền do Google trả về để đổi lấy Access Token.
+        - state (str, query param): Chuỗi bảo mật ngẫu nhiên để xác thực phiên chống CSRF.
+        - error (str, optional query param): Thông báo lỗi nếu người dùng hủy cấp quyền hoặc Google từ chối.
+        - Cookie: `oauth_state` chứa mã state đã lưu ở bước khởi tạo.
+        - Database Session: Kết nối PostgreSQL để tra cứu và lưu trữ tài khoản.
+
+    Output (Đầu ra):
+        - 302 Found (Redirect):
+            + Thành công: Điều hướng về Frontend kèm token xác thực:
+              `${FRONTEND_URL}/auth/callback?token={access_token}&refresh_token={refresh_token}`
+            + Thất bại: Điều hướng về Frontend kèm thông tin lỗi:
+              `${FRONTEND_URL}?error={error_message}`
+        - Xóa Cookie: `oauth_state` sau khi hoàn tất xác thực.
+    """
     # 1. Người dùng bấm Cancel hoặc Google báo lỗi
     if error:
         error_url = f"{settings.FRONTEND_URL}?error={urllib.parse.quote(error)}"
@@ -99,12 +125,34 @@ async def sso_google_callback(
 
 @router.get("/me", response_model=UserSummary)
 def get_current_user_profile(current_user: User = Depends(get_current_user)):
-    """Lấy thông tin tài khoản hiện tại đang đăng nhập."""
+    """
+    Lấy thông tin hồ sơ của người dùng hiện tại đang đăng nhập.
+
+    Input (Đầu vào):
+        - Header: Authorization: Bearer <access_token> (JWT token hợp lệ sinh ra khi đăng nhập).
+
+    Output (Đầu ra):
+        - Status 200 OK: Trả về đối tượng JSON UserSummary gồm:
+            + id (str): Định danh UUID của người dùng.
+            + name (str): Họ và tên hiển thị.
+            + email (str): Địa chỉ email.
+            + avatarUrl (str | None): Đường dẫn ảnh đại diện.
+            + initials (str): Hai chữ cái viết tắt tên hiển thị.
+            + color (str): Mã màu đại diện (#RRGGBB).
+        - Status 401 Unauthorized: Nếu thiếu token, token không hợp lệ hoặc tài khoản bị khóa.
+    """
     return user_to_summary(current_user)
 
 
 @router.post("/logout")
 def logout():
-    """Đăng xuất người dùng."""
-    return {"status": "ok"}
+    """
+    Đăng xuất người dùng khỏi hệ thống.
 
+    Input (Đầu vào):
+        - Không bắt buộc tham số.
+
+    Output (Đầu ra):
+        - Status 200 OK: Trả về đối tượng {"status": "ok"}.
+    """
+    return {"status": "ok"}

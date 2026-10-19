@@ -42,6 +42,7 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./database:/database:ro
     healthcheck:
       test:
         - CMD-SHELL
