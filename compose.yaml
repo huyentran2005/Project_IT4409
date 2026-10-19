@@ -28,6 +28,7 @@ services:
       - /app/node_modules
     environment:
       VITE_API_URL: http://localhost:8000
+      VITE_USE_MOCKS: "false"
     depends_on:
       - backend
     restart: unless-stopped
@@ -42,6 +43,7 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./database:/database:ro
     healthcheck:
       test:
         - CMD-SHELL

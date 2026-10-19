@@ -1,121 +1,218 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useState, useEffect } from 'react'
+
+import './styles/index.css'
+import { AppSidebar } from './components/layout/AppSidebar'
+import { TopBar } from './components/layout/TopBar'
+import { CreateTaskModal } from './components/tasks/CreateTaskModal'
+import { TaskDrawer } from './components/tasks/TaskDrawer'
+import { CreateProjectModal } from './components/projects/CreateProjectModal'
+import { useBoard } from './hooks/useBoard'
+import { BoardPage } from './pages/BoardPage'
+import { AuthPage } from './pages/AuthPage'
+import { MyTasksPage } from './pages/MyTasksPage'
+import { OverviewPage } from './pages/OverviewPage'
+import { ProfilePage } from './pages/ProfilePage'
+import { currentUser } from './data/mockData'
+import { authApi, type LoginPayload, type RegisterPayload, type SsoProvider } from './services/authApi'
+import { getTaskAssignees, type Task, type TaskComment, type TaskPropertiesUpdate, type TaskStatus, type TimesheetEntry, type UserSummary } from './types/task'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const { board, projects, columns, query, setQuery, filter, setFilter, loading, selectProject, createProject, moveTask, addTask, deleteTask, inviteMember, logTime, addComment, updateReviewer, updateProperties } = useBoard()
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+  const [pendingTaskMove, setPendingTaskMove] = useState<{ taskId: string; status: TaskStatus } | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [creatingProject, setCreatingProject] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarHidden, setSidebarHidden] = useState(() => localStorage.getItem('taskflow-sidebar-hidden') === 'true')
+  const [dark, setDark] = useState(false)
+  const [activeSection, setActiveSection] = useState('Tổng quan')
+  const [authenticated, setAuthenticated] = useState(() => localStorage.getItem('taskflow-authenticated') === 'true')
+  const useMocks = import.meta.env.VITE_USE_MOCKS !== 'false'
+
+  const isTaskOverdue = (task: Task) => {
+    const reference = task.completedAt ? new Date(task.completedAt) : new Date()
+    return reference > new Date(`${task.endDate}T23:59:59`)
+  }
+  const getTaskProperties = (task: Task): TaskPropertiesUpdate => ({
+    description: task.description,
+    priority: task.priority,
+    assigneeIds: getTaskAssignees(task).map((member) => member.id),
+    startDate: task.startDate,
+    endDate: task.endDate,
+    overdueReason: task.overdueReason ?? '',
+    acceptanceResult: task.acceptanceResult ?? '',
+  })
+
+  const setDesktopSidebarHidden = (hidden: boolean) => {
+    localStorage.setItem('taskflow-sidebar-hidden', String(hidden))
+    setSidebarHidden(hidden)
+  }
+
+  const finishAuthentication = () => {
+    localStorage.setItem('taskflow-authenticated', 'true')
+    setAuthenticated(true)
+  }
+
+  const authenticate = async (data: { mode: 'login' | 'register'; name?: string; email: string; phone?: string; password: string }) => {
+    if (useMocks) {
+      localStorage.setItem('taskflow-current-user', JSON.stringify({ ...currentUser, name: data.name || currentUser.name, email: data.email }))
+      finishAuthentication()
+      return
+    }
+    const response = data.mode === 'login'
+      ? await authApi.login({ email: data.email, password: data.password } satisfies LoginPayload)
+      : await authApi.register({ name: data.name ?? '', email: data.email, phone: data.phone, password: data.password } satisfies RegisterPayload)
+    localStorage.setItem('taskflow-token', response.accessToken)
+    localStorage.setItem('taskflow-current-user', JSON.stringify(response.user))
+    finishAuthentication()
+  }
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const token = params.get('token')
+    const refreshToken = params.get('refresh_token')
+    const error = params.get('error')
+
+    if (error) {
+      alert(`Đăng nhập thất bại: ${decodeURIComponent(error)}`)
+      window.history.replaceState({}, '', '/')
+      return
+    }
+
+    if (token) {
+      localStorage.setItem('taskflow-token', token)
+      if (refreshToken) {
+        localStorage.setItem('taskflow-refresh-token', refreshToken)
+      }
+
+      authApi
+        .getMe(token)
+        .then((user) => {
+          localStorage.setItem('taskflow-current-user', JSON.stringify(user))
+          finishAuthentication()
+        })
+        .catch(() => {
+          finishAuthentication()
+        })
+        .finally(() => {
+          window.history.replaceState({}, '', '/')
+        })
+    }
+  }, [])
+
+  const authenticateWithSso = (provider: SsoProvider) => {
+    window.location.assign(authApi.getSsoUrl(provider))
+  }
+
+
+  const logout = () => {
+    if (!useMocks) void authApi.logout().catch(() => undefined)
+    localStorage.removeItem('taskflow-authenticated')
+    localStorage.removeItem('taskflow-token')
+    localStorage.removeItem('taskflow-current-user')
+    setAuthenticated(false)
+  }
+
+  const moveSelectedTask = (status: TaskStatus) => {
+    if (!selectedTask || selectedTask.status === status) return
+    const needsReviewer = status === 'review' && !selectedTask.reviewer
+    const needsOverdueReason = isTaskOverdue(selectedTask) && !selectedTask.overdueReason?.trim()
+    if (needsReviewer || needsOverdueReason) {
+      setPendingTaskMove({ taskId: selectedTask.id, status })
+      return
+    }
+    moveTask(selectedTask.id, status)
+    setPendingTaskMove(null)
+    setSelectedTask({ ...selectedTask, status })
+  }
+  const moveBoardTask = (taskId: string, status: TaskStatus) => {
+    const task = board.columns.flatMap((column) => column.tasks).find((item) => item.id === taskId)
+    if (!task || task.status === status) return
+    const needsReviewer = status === 'review' && !task.reviewer
+    const needsOverdueReason = isTaskOverdue(task) && !task.overdueReason?.trim()
+    if (needsReviewer || needsOverdueReason) {
+      setSelectedTask(task)
+      setPendingTaskMove({ taskId: task.id, status })
+      return
+    }
+    moveTask(taskId, status)
+  }
+  const changeReviewer = (reviewer: UserSummary) => {
+    if (!selectedTask) return
+    const pendingMove = pendingTaskMove?.taskId === selectedTask.id ? pendingTaskMove : null
+    const stillNeedsOverdueReason = isTaskOverdue(selectedTask) && !selectedTask.overdueReason?.trim()
+    const canFinishMove = pendingMove && !stillNeedsOverdueReason
+    if (canFinishMove) moveTask(selectedTask.id, pendingMove.status, reviewer, getTaskProperties(selectedTask))
+    else updateReviewer(selectedTask.id, reviewer)
+    setSelectedTask({ ...selectedTask, reviewer, ...(canFinishMove ? { status: pendingMove.status } : {}) })
+    if (canFinishMove) setPendingTaskMove(null)
+  }
+  const changeProperties = (properties: TaskPropertiesUpdate) => {
+    if (!selectedTask) return
+    const normalizedProperties = {
+      ...properties,
+      description: properties.description.trim(),
+      overdueReason: properties.overdueReason.trim(),
+      acceptanceResult: properties.acceptanceResult.trim(),
+    }
+    const pendingMove = pendingTaskMove?.taskId === selectedTask.id ? pendingTaskMove : null
+    const canFinishMove = pendingMove
+      && (!isTaskOverdue(selectedTask) || Boolean(normalizedProperties.overdueReason))
+      && (pendingMove.status !== 'review' || Boolean(selectedTask.reviewer))
+    if (canFinishMove) moveTask(selectedTask.id, pendingMove.status, selectedTask.reviewer, normalizedProperties)
+    else updateProperties(selectedTask.id, normalizedProperties)
+    const assignees = board.project.members.filter((member) => normalizedProperties.assigneeIds.includes(member.id))
+    setSelectedTask({
+      ...selectedTask,
+      ...(canFinishMove ? { status: pendingMove.status } : {}),
+      description: normalizedProperties.description,
+      priority: normalizedProperties.priority,
+      assignees,
+      startDate: normalizedProperties.startDate,
+      endDate: normalizedProperties.endDate,
+      overdueReason: normalizedProperties.overdueReason || undefined,
+      acceptanceResult: normalizedProperties.acceptanceResult || undefined,
+    })
+    if (canFinishMove) setPendingTaskMove(null)
+  }
+  const openTask = (task: Task) => {
+    setPendingTaskMove(null)
+    setSelectedTask(task)
+  }
+  const logSelectedTime = (entry: TimesheetEntry) => {
+    if (!selectedTask) return
+    logTime(selectedTask.id, entry)
+    setSelectedTask({ ...selectedTask, timesheets: [...selectedTask.timesheets, entry] })
+  }
+  const commentOnSelectedTask = (comment: TaskComment) => {
+    if (!selectedTask) return
+    addComment(selectedTask.id, comment)
+    setSelectedTask({ ...selectedTask, comments: selectedTask.comments + 1, commentItems: [...selectedTask.commentItems, comment] })
+  }
+  const deleteSelectedTask = () => {
+    if (!selectedTask) return
+    deleteTask(selectedTask.id)
+    setPendingTaskMove(null)
+    setSelectedTask(null)
+  }
+
+  if (!authenticated) return <AuthPage onAuthenticate={authenticate} onSso={authenticateWithSso} />
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+    <div className={`app${dark ? ' app--dark' : ''}${sidebarHidden ? ' app--sidebar-hidden' : ''}`}>
+      <AppSidebar open={sidebarOpen} activeSection={activeSection} activeProjectId={board.project.id} projects={projects} onNavigate={(section) => { setActiveSection(section); setFilter(section === 'Công việc của tôi' ? 'mine' : 'all'); setSidebarOpen(false) }} onSelectProject={selectProject} onCreateProject={() => setCreatingProject(true)} onToggleHidden={() => setDesktopSidebarHidden(true)} onClose={() => setSidebarOpen(false)} />
+      <div className="app__content">
+        <TopBar projectName={activeSection === 'Hồ sơ' ? 'Hồ sơ cá nhân' : board.project.name} query={query} onQueryChange={setQuery} onCreate={() => setCreating(true)} onMenu={() => { if (window.matchMedia('(max-width: 900px)').matches) setSidebarOpen(true); else setDesktopSidebarHidden(false) }} onToggleTheme={() => setDark((value) => !value)} onProfile={() => setActiveSection('Hồ sơ')} onLogout={logout} />
+        {loading && <div className="loading-state">Đang tải dữ liệu...</div>}
+        {!loading && activeSection === 'Tổng quan' && <OverviewPage board={board} onOpenProject={() => setActiveSection('Dự án')} onOpenMyTasks={() => setActiveSection('Công việc của tôi')} onOpenTask={openTask} />}
+        {!loading && activeSection === 'Công việc của tôi' && <MyTasksPage board={board} onOpenTask={openTask} />}
+        {!loading && activeSection === 'Dự án' && <BoardPage board={board} columns={columns} filter={filter} onFilter={setFilter} onOpenTask={openTask} onMoveTask={moveBoardTask} onDeleteTask={deleteTask} onCreate={() => setCreating(true)} onInviteMember={inviteMember} />}
+        {!loading && activeSection === 'Hồ sơ' && <ProfilePage />}
+      </div>
+      {selectedTask && <TaskDrawer key={selectedTask.id} task={selectedTask} members={board.project.members} reviewRequested={pendingTaskMove?.taskId === selectedTask.id && pendingTaskMove.status === 'review' && !selectedTask.reviewer} overdueReasonRequired={pendingTaskMove?.taskId === selectedTask.id && isTaskOverdue(selectedTask) && !selectedTask.overdueReason?.trim()} onClose={() => { setSelectedTask(null); setPendingTaskMove(null) }} onMove={moveSelectedTask} onReviewerChange={changeReviewer} onUpdateProperties={changeProperties} onDelete={deleteSelectedTask} onLogTime={logSelectedTime} onAddComment={commentOnSelectedTask} />}
+      {creating && <CreateTaskModal projectName={board.project.name} members={board.project.members} onClose={() => setCreating(false)} onCreate={addTask} />}
+      {creatingProject && <CreateProjectModal onClose={() => setCreatingProject(false)} onCreate={createProject} />}
+    </div>
   )
 }
 

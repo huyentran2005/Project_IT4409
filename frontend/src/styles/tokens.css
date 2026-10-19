@@ -1,0 +1,15 @@
+:root {
+  --surface: #fff; --surface-subtle: #f8f9fc; --surface-muted: #f1f3f8;
+  --border: #e5e8ef; --text: #172033; --muted: #697386; --muted-2: #98a1b2;
+  --primary: #5b5ce2; --primary-soft: #eeeeff;
+  --shadow-sm: 0 1px 2px rgba(26,32,55,.04), 0 5px 16px rgba(26,32,55,.05);
+  --shadow-lg: 0 28px 70px rgba(21,28,52,.18);
+}
+.app { min-height: 100vh; background: #f6f7fb; color: var(--text); display: flex; }
+.app--dark { --surface:#1a2030; --surface-subtle:#20283a; --surface-muted:#283146; --border:#303a50; --text:#edf1f8; --muted:#9ba6ba; --muted-2:#77839a; --primary-soft:#2d2d58; background:#141925; }
+.app__content { min-width: 0; flex: 1; margin-left: 248px; }
+.icon-button { width: 38px; height: 38px; border-radius: 10px; display: inline-grid; place-items: center; background: transparent; color: var(--muted); }
+.icon-button:hover { background: var(--surface-muted); color: var(--text); }
+.primary-button,.create-button { background: var(--primary); color: #fff; border-radius: 9px; font-weight: 600; }
+.secondary-button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 9px; font-weight: 600; display: inline-flex; align-items: center; gap: 7px; }
+
