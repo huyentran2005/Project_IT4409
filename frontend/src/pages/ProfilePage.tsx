@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { authApi } from '../services/authApi'
 import { Avatar } from '../components/ui/Avatar'
 import { Icon } from '../components/ui/Icon'
 import { currentUser } from '../data/mockData'
@@ -13,15 +14,79 @@ export function ProfilePage() {
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(savedUser.name)
   const [email, setEmail] = useState(savedUser.email)
-  const [phone, setPhone] = useState(savedUser.phone ?? '0357 025 570')
+  const [phone, setPhone] = useState(savedUser.phone ?? '')
+  const [profileReady, setProfileReady] = useState(false)//thêm state profile
+  const [saving, setSaving] = useState(false)//thêm state saving
   const [message, setMessage] = useState('')
   const [showPasswords, setShowPasswords] = useState(false)
+//lấy hồ sơ từ backend
+  useEffect(() => {
+    let ignore = false
 
-  const saveProfile = (event: React.FormEvent) => {
+    const loadProfile = async () => {
+      try {
+        const token = localStorage.getItem('taskflow-token')
+        if (!token) throw new Error('Bạn cần đăng nhập lại.')
+
+        const user = await authApi.getMe(token)
+        if (ignore) return
+
+        localStorage.setItem(
+          'taskflow-current-user',
+          JSON.stringify(user),
+        )
+
+        setName(user.name)
+        setEmail(user.email)
+        setPhone(user.phone ?? '')
+        setProfileReady(true)
+      } catch {
+        if (!ignore) {
+          setMessage('Không tải được hồ sơ. Vui lòng đăng nhập lại.')
+        }
+      }
+    }
+
+    void loadProfile()
+
+    return () => {
+      ignore = true
+    }
+  }, [])
+  const saveProfile = async (event: React.FormEvent) => {
     event.preventDefault()
-    localStorage.setItem('taskflow-current-user', JSON.stringify({ ...savedUser, name, email, phone }))
-    setEditing(false)
-    setMessage('Đã cập nhật thông tin tài khoản.')
+    if (!profileReady || saving) return
+
+    const token = localStorage.getItem('taskflow-token')
+    if (!token) {
+      setMessage('Bạn cần đăng nhập lại.')
+      return
+    }
+
+    setSaving(true)
+    setMessage('')
+
+    try {
+      const user = await authApi.updateMe(token, {
+        name: name.trim(),
+        phone: phone.trim() || null,
+      })
+
+      localStorage.setItem(
+        'taskflow-current-user',
+        JSON.stringify(user),
+      )
+
+      setName(user.name)
+      setEmail(user.email)
+      setPhone(user.phone ?? '')
+      setEditing(false)
+      setMessage('Đã cập nhật thông tin tài khoản.')
+    } catch {
+      setMessage('Không thể lưu hồ sơ. Vui lòng kiểm tra và thử lại.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const changePassword = (event: React.FormEvent<HTMLFormElement>) => {
@@ -41,15 +106,23 @@ export function ProfilePage() {
     <nav className="profile-tabs" aria-label="Hồ sơ cá nhân"><button className={tab === 'account' ? 'active' : ''} onClick={() => { setTab('account'); setMessage('') }}><Icon name="user" />Tài khoản</button><button className={tab === 'security' ? 'active' : ''} onClick={() => { setTab('security'); setMessage('') }}><Icon name="lock" />Bảo mật</button></nav>
     {message && <div className="profile-message">{message}</div>}
     {tab === 'account' && <section className="profile-page-card">
-      <div className="profile-page-summary"><Avatar user={savedUser} size={68} /><div><h2>{name}</h2><p>{email}</p><span className="profile-status">Đang hoạt động</span></div><button className="primary-button" onClick={() => { setEditing((value) => !value); setMessage('') }}><Icon name="user" />{editing ? 'Hủy chỉnh sửa' : 'Chỉnh sửa thông tin'}</button></div>
+      <div className="profile-page-summary"><Avatar user={savedUser} size={68} /><div><h2>{name}</h2><p>{email}</p><span className="profile-status">Đang hoạt động</span></div><button className="primary-button" disabled={!profileReady || saving} onClick={() => { setEditing((value) => !value); setMessage('') }}><Icon name="user" />{editing ? 'Hủy chỉnh sửa' : 'Chỉnh sửa thông tin'}</button></div>
       <form className="profile-account-form" onSubmit={saveProfile}>
-        <label>Họ tên<input disabled={!editing} value={name} onChange={(event) => setName(event.target.value)} /></label>
-        <label>Email<input disabled={!editing} type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
-        <label>Số điện thoại<input disabled={!editing} value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
+        <label>Họ tên<input disabled={!editing || saving} value={name} onChange={(event) => setName(event.target.value)} /></label>
+        <label>Email<input type="email" value={email} readOnly /></label>
+        <label>Số điện thoại<input disabled={!editing || saving} value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
         <label>Vai trò<input disabled value="Thành viên" /></label>
         <label>Phương thức đăng nhập<input disabled value="Google / mật khẩu" /></label>
         <label>Trạng thái<input disabled value="Tài khoản đang hoạt động" /></label>
-        {editing && <button className="primary-button" type="submit">Lưu thay đổi</button>}
+        {editing && (
+          <button
+            className="primary-button"
+            type="submit"
+            disabled={!profileReady || saving}
+          >
+            {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
+          </button>
+        )}
       </form>
     </section>}
     {tab === 'security' && <section className="profile-page-card security-card"><header><h2>Đổi mật khẩu</h2><p>Nhập mật khẩu hiện tại, sau đó đặt mật khẩu mới.</p></header><form onSubmit={changePassword}>

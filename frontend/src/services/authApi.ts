@@ -17,6 +17,15 @@ export interface AuthResponse {
 }
 
 export type SsoProvider = 'google' | 'github'
+//thêm kiểu dữ liệu ProfileResponse và ProfileUpdatePayload để sử dụng trong các API liên quan đến trang cá nhân
+export interface ProfileResponse extends UserSummary {
+  phone: string | null
+}
+
+export interface ProfileUpdatePayload {
+  name?: string
+  phone?: string | null
+}
 
 export const authApi = {
   login(payload: LoginPayload) {
@@ -29,12 +38,24 @@ export const authApi = {
     return `${import.meta.env.VITE_API_URL ?? 'http://localhost:8000'}/api/auth/sso/${provider}`
   },
   getMe(token: string) {
-    return apiRequest<UserSummary>('/api/auth/me', {
+    return apiRequest<ProfileResponse>('/api/auth/me', {
       headers: { Authorization: `Bearer ${token}` },
     })
   },
-  logout() {
-    return apiRequest<void>('/api/auth/logout', { method: 'POST' })
+
+  updateMe(token: string, payload: ProfileUpdatePayload) {
+    return apiRequest<ProfileResponse>('/api/auth/me', {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+    })
+  },
+  //phuong thuc phia client goi API de logout, la ham dau vao cua ham revoke_session trong file auth.py
+  logout(refreshToken: string) {
+    return apiRequest<void>('/api/auth/logout', {
+      method: 'POST',
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    })
   },
 }
 

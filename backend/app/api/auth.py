@@ -1,13 +1,18 @@
 import secrets
 import urllib.parse
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Request, Response, HTTPException, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from app.core.config import settings
+from app.core.security import hash_token
 from app.db.session import get_db
 from app.api.deps import get_current_user
+from app.models.auth_session import AuthSession
 from app.models.user import User
 from app.schemas.user import UserSummary, user_to_summary
+from pydantic import BaseModel, Field
+from app.schemas.user import ProfileUpdate, ProfileResponse
 from app.services.google_oauth import (
     get_google_auth_url,
     exchange_google_code,
@@ -236,7 +241,7 @@ async def sso_github_callback(
         return RedirectResponse(url=error_url, status_code=status.HTTP_302_FOUND)
 
 
-@router.get("/me", response_model=UserSummary)
+@router.get("/me", response_model=ProfileResponse)
 def get_current_user_profile(current_user: User = Depends(get_current_user)):
     """
     Lấy thông tin hồ sơ của người dùng hiện tại đang đăng nhập.
@@ -254,18 +259,67 @@ def get_current_user_profile(current_user: User = Depends(get_current_user)):
             + color (str): Mã màu đại diện (#RRGGBB).
         - Status 401 Unauthorized: Nếu thiếu token, token không hợp lệ hoặc tài khoản bị khóa.
     """
-    return user_to_summary(current_user)
+    #cho api lấy hồ sơ trả cả số điện thoại
+    return ProfileResponse(
+        **user_to_summary(current_user).model_dump(),
+        phone=current_user.phone,
+    )
 
+#endpoint cập nhật hồ sơ user đang đăng nhập
+@router.patch("/me", response_model=ProfileResponse)
+def update_current_user_profile(
+    payload: ProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Cập nhật hồ sơ của tài khoản đang đăng nhập."""
+    changes = payload.model_dump(exclude_unset=True)
 
-@router.post("/logout")
-def logout():
+    if "name" in changes:
+        current_user.full_name = changes["name"]
+
+    if "phone" in changes:
+        current_user.phone = changes["phone"] or None
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    db.refresh(current_user)
+
+    return ProfileResponse(
+        **user_to_summary(current_user).model_dump(),
+        phone=current_user.phone,
+    )
+
+#đăng xuất
+class LogOutRequest(BaseModel):
+    refresh_token: str = Field(min_length = 1, max_length = 512)
+@router.post("/logout", status_code = status.HTTP_204_NO_CONTENT)
+def logout(logout_request: LogOutRequest,
+           db: Session = Depends(get_db),):
+    revoke_session(db, logout_request.refresh_token)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+#thu hoi phien dang nhap dua tren refresh token
+def revoke_session(db: Session, refresh_token: str) -> None:
+    token_hash = hash_token(refresh_token)
+    (
+        db.query(AuthSession)
+        .filter(AuthSession.refresh_token_hash == token_hash,
+                AuthSession.revoked_at.is_(None),
+                )
+        .update(
+            {"revoked_at": datetime.now(timezone.utc)},
+            synchronize_session=False,
+        )
+    )
+    db.commit()
     """
-    Đăng xuất người dùng khỏi hệ thống.
-
-    Input (Đầu vào):
-        - Không bắt buộc tham số.
-
-    Output (Đầu ra):
-        - Status 200 OK: Trả về đối tượng {"status": "ok"}.
+    Database lưu hash, nên phải hash token nhận được để tìm phiên.
+    revoked_at khác NULL nghĩa là phiên đã bị thu hồi.
+    Chỉ thu hồi phiên có token tương ứng; các thiết bị khác vẫn giữ phiên của chúng.
+    Gọi lại với cùng token vẫn thành công và không thay đổi thời điểm thu hồi cũ.
     """
-    return {"status": "ok"}

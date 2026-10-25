@@ -105,12 +105,29 @@ function App() {
   }
 
 
-  const logout = () => {
-    if (!useMocks) void authApi.logout().catch(() => undefined)
-    localStorage.removeItem('taskflow-authenticated')
-    localStorage.removeItem('taskflow-token')
-    localStorage.removeItem('taskflow-current-user')
-    setAuthenticated(false)
+  const logout = async () => {
+    const refreshToken = localStorage.getItem('taskflow-refresh-token')
+
+    try {
+      if (!useMocks) {
+        if (!refreshToken) {
+          throw new Error('Missing refresh token')
+        }
+
+        await authApi.logout(refreshToken)
+      }
+    } catch {
+      alert(
+        'Chưa xác nhận được việc thu hồi phiên trên máy chủ. ' +
+        'Dữ liệu đăng nhập trên trình duyệt sẽ được xóa.'
+      )
+    } finally {
+      localStorage.removeItem('taskflow-authenticated')
+      localStorage.removeItem('taskflow-token')
+      localStorage.removeItem('taskflow-refresh-token')
+      localStorage.removeItem('taskflow-current-user')
+      setAuthenticated(false)
+    }
   }
 
   const moveSelectedTask = (status: TaskStatus) => {
