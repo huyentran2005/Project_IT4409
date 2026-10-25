@@ -17,7 +17,8 @@ import { authApi, type LoginPayload, type RegisterPayload, type SsoProvider } fr
 import { getTaskAssignees, type Task, type TaskComment, type TaskPropertiesUpdate, type TaskStatus, type TimesheetEntry, type UserSummary } from './types/task'
 
 function App() {
-  const { board, projects, columns, query, setQuery, filter, setFilter, loading, selectProject, createProject, moveTask, addTask, deleteTask, inviteMember, logTime, addComment, updateReviewer, updateProperties } = useBoard()
+  const [authenticated, setAuthenticated] = useState(() => localStorage.getItem('taskflow-authenticated') === 'true')
+  const { board, projects, columns, query, setQuery, filter, setFilter, loading, selectProject, createProject, moveTask, addTask, deleteTask, inviteMember, logTime, addComment, updateReviewer, updateProperties } = useBoard('p-01', authenticated)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [pendingTaskMove, setPendingTaskMove] = useState<{ taskId: string; status: TaskStatus } | null>(null)
   const [creating, setCreating] = useState(false)
@@ -26,7 +27,6 @@ function App() {
   const [sidebarHidden, setSidebarHidden] = useState(() => localStorage.getItem('taskflow-sidebar-hidden') === 'true')
   const [dark, setDark] = useState(false)
   const [activeSection, setActiveSection] = useState('Tổng quan')
-  const [authenticated, setAuthenticated] = useState(() => localStorage.getItem('taskflow-authenticated') === 'true')
   const useMocks = import.meta.env.VITE_USE_MOCKS !== 'false'
 
   const isTaskOverdue = (task: Task) => {
