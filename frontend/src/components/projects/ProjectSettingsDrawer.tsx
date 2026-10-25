@@ -29,11 +29,12 @@ interface ProjectSettingsDrawerProps {
   project: ProjectSummary
   documents: ProjectDocument[]
   onInvite: (member: UserSummary) => void
-  onUpload: (document: ProjectDocument) => void
+  onUpload: (file: File) => Promise<void>
+  onDownload?: (document: ProjectDocument) => Promise<void>
   onClose: () => void
 }
 
-export function ProjectSettingsDrawer({ project, documents, onInvite, onUpload, onClose }: ProjectSettingsDrawerProps) {
+export function ProjectSettingsDrawer({ project, documents, onInvite, onUpload, onDownload, onClose }: ProjectSettingsDrawerProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('members')
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
@@ -46,7 +47,9 @@ export function ProjectSettingsDrawer({ project, documents, onInvite, onUpload, 
   const [permissionsDirty, setPermissionsDirty] = useState(false)
   const [permissionsSaved, setPermissionsSaved] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
-
+  const [uploading, setUploading] = useState(false)
+  const [documentError, setDocumentError] = useState('')
+  
   const invite = (event: React.FormEvent) => {
     event.preventDefault()
     const email = inviteEmail.trim().toLowerCase()
@@ -59,9 +62,22 @@ export function ProjectSettingsDrawer({ project, documents, onInvite, onUpload, 
     setInviteOpen(false)
   }
 
-  const upload = (file?: File) => {
+  const upload = async (file?: File) => {
     if (!file) return
-    onUpload({ id: `document-${Date.now()}`, name: file.name, type: file.name.split('.').pop()?.toUpperCase() ?? 'FILE', size: `${Math.max(file.size / 1024 / 1024, .01).toFixed(2)} MB`, updatedAt: new Date().toISOString(), updatedBy: 'Minh Anh' })
+    setDocumentError('')
+    setUploading(true)
+    try {
+      await onUpload(file)
+    } catch (reason) {
+      setDocumentError(reason instanceof Error ? reason.message : 'Không thể tải tệp lên.')
+    } finally {
+      setUploading(false)
+      if (fileInput.current) fileInput.current.value = '' // cho phép chọn lại cùng một tệp
+    }
+  }
+  const download = async (document: ProjectDocument) => {
+    setDocumentError('')
+    try { await onDownload?.(document) } catch (reason) { setDocumentError(reason instanceof Error ? reason.message : 'Không thể tải tệp xuống.') }
   }
 
   const changeMemberRole = (memberId: string, role: ProjectRole) => {
@@ -132,9 +148,10 @@ export function ProjectSettingsDrawer({ project, documents, onInvite, onUpload, 
 
           {activeTab === 'documents' && (
             <section>
-              <div className="settings-section-title"><div><h2>Tài liệu dự án</h2><p>Tài liệu dùng chung cho các thành viên</p></div><button className="primary-button" onClick={() => fileInput.current?.click()}><Icon name="upload" size={15} />Tải lên</button><input ref={fileInput} type="file" hidden onChange={(event) => upload(event.target.files?.[0])} /></div>
+              <div className="settings-section-title"><div><h2>Tài liệu dự án</h2><p>Tài liệu dùng chung cho các thành viên</p></div><button className="primary-button" disabled={uploading} onClick={() => fileInput.current?.click()}><Icon name="upload" size={15} />{uploading ? 'Đang tải lên...' : 'Tải lên'}</button><input ref={fileInput} type="file" hidden onChange={(event) => upload(event.target.files?.[0])} /></div>
+              {documentError && <p className="auth-error" role="alert">{documentError}</p>}
               <div className="document-list">
-                {documents.map((document) => <div className="document-row" key={document.id}><span className="document-icon"><Icon name="file" size={18} /></span><div><strong>{document.name}</strong><span>{document.type} · {document.size} · {document.updatedBy}</span></div><time>{new Intl.DateTimeFormat('vi-VN').format(new Date(document.updatedAt))}</time></div>)}
+               {documents.map((document) => <div className="document-row" key={document.id}><span className="document-icon"><Icon name="file" size={18} /></span><div><strong>{document.name}</strong><span>{document.type} · {document.size} · {document.updatedBy}{onDownload && <> · <button type="button" onClick={() => void download(document)}>Tải xuống</button></>}</span></div><time>{new Intl.DateTimeFormat('vi-VN').format(new Date(document.updatedAt))}</time></div>)}
               </div>
             </section>
           )}

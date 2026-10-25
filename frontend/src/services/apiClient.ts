@@ -1,4 +1,5 @@
 export const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+
 export class ApiError extends Error {
   status: number
 
@@ -9,7 +10,7 @@ export class ApiError extends Error {
   }
 }
 
-async function readErrorMessage(response: Response): Promise<string> {
+export async function readErrorMessage(response: Response): Promise<string> {
   try {
     const body = await response.json()
     const detail = body?.detail
@@ -24,10 +25,15 @@ async function readErrorMessage(response: Response): Promise<string> {
   return `Yêu cầu thất bại (${response.status})`
 }
 
+export function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem('taskflow-token')
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
-     headers: { 'Content-Type': 'application/json', ...options.headers },
+      headers: { 'Content-Type': 'application/json', ...authHeaders(), ...options.headers },
   })
 
   if (!response.ok) {
