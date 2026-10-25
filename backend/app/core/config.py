@@ -24,6 +24,14 @@ class Settings(BaseSettings):
     GITHUB_CLIENT_SECRET: str = ""
     GITHUB_REDIRECT_URI: str = "http://localhost:8000/api/auth/sso/github/callback"
 
+    # MinIO (lưu tài liệu)
+    MINIO_ENDPOINT: str = "minio:9000"
+    MINIO_ROOT_USER: str = "minioadmin"
+    MINIO_ROOT_PASSWORD: str = "minioadmin_password"
+    MINIO_BUCKET: str = "task-files"
+    MINIO_SECURE: bool = False
+    MAX_UPLOAD_MB: int = 25
+
     # JWT Security
     JWT_SECRET_KEY: str = "taskflow_super_secret_jwt_key_it4409_2026"
     JWT_ALGORITHM: str = "HS256"

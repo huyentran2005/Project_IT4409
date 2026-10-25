@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.auth import router as auth_router
+from app.api.project_content import router as project_content_router
 
 app = FastAPI(title=settings.PROJECT_NAME)
 
@@ -24,6 +25,7 @@ app.add_middleware(
 
 # Đăng ký các router
 app.include_router(auth_router, prefix="/api")
+app.include_router(project_content_router, prefix="/api")
 
 
 @app.get("/health")
