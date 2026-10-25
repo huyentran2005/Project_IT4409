@@ -8,6 +8,7 @@ from app.db.session import get_db
 from app.api.deps import get_current_user
 from app.models.user import User
 from app.schemas.user import UserSummary, user_to_summary
+from app.schemas.user import ProfileUpdate, ProfileResponse
 from app.services.google_oauth import (
     get_google_auth_url,
     exchange_google_code,
@@ -251,7 +252,7 @@ async def sso_github_callback(
         return RedirectResponse(url=error_url, status_code=status.HTTP_302_FOUND)
 
 
-@router.get("/me", response_model=UserSummary)
+@router.get("/me", response_model=ProfileResponse)
 def get_current_user_profile(current_user: User = Depends(get_current_user)):
     """
     Lấy thông tin hồ sơ của người dùng hiện tại đang đăng nhập.
@@ -269,7 +270,40 @@ def get_current_user_profile(current_user: User = Depends(get_current_user)):
             + color (str): Mã màu đại diện (#RRGGBB).
         - Status 401 Unauthorized: Nếu thiếu token, token không hợp lệ hoặc tài khoản bị khóa.
     """
-    return user_to_summary(current_user)
+    #cho api lấy hồ sơ trả cả số điện thoại
+    return ProfileResponse(
+        **user_to_summary(current_user).model_dump(),
+        phone=current_user.phone,
+    )
+
+#endpoint cập nhật hồ sơ user đang đăng nhập
+@router.patch("/me", response_model=ProfileResponse)
+def update_current_user_profile(
+    payload: ProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Cập nhật hồ sơ của tài khoản đang đăng nhập."""
+    changes = payload.model_dump(exclude_unset=True)
+
+    if "name" in changes:
+        current_user.full_name = changes["name"]
+
+    if "phone" in changes:
+        current_user.phone = changes["phone"] or None
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    db.refresh(current_user)
+
+    return ProfileResponse(
+        **user_to_summary(current_user).model_dump(),
+        phone=current_user.phone,
+    )
 
 
 _AUTH_STATUS = {

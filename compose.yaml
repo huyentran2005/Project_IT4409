@@ -8,8 +8,6 @@ services:
     env_file:
       - .env
     depends_on:
-      db:
-        condition: service_healthy
       minio:
         condition: service_healthy
     command: >
@@ -40,7 +38,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database:/database:ro
