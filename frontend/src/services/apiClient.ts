@@ -31,9 +31,17 @@ export function authHeaders(): Record<string, string> {
 }
 
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const headers = new Headers(options.headers)
+  if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+
+  const accessToken = localStorage.getItem('taskflow-token')
+  if (accessToken && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${accessToken}`)
+  }
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...authHeaders(), ...options.headers },
+    headers,
   })
 
   if (!response.ok) {

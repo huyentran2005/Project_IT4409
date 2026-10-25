@@ -190,6 +190,25 @@
   box-shadow: 0 1px 4px rgb(15 23 42 / 20%);
 }
 
+.settings-section-title button:disabled,
+.role-badge:disabled,
+.permission-toggle:disabled {
+  cursor: not-allowed;
+  opacity: .46;
+  filter: saturate(.55);
+}
+
+.permission-toggle:disabled:hover {
+  border-color: var(--border);
+  background: var(--surface);
+  transform: none;
+}
+
+.permission-toggle.allowed:disabled:hover {
+  border-color: var(--switch-color);
+  background: color-mix(in srgb, var(--switch-color) 82%, white);
+}
+
 @media (max-width: 650px) {
   .settings-section-title {
     align-items: stretch;

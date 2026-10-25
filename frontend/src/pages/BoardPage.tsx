@@ -24,7 +24,7 @@ interface BoardPageProps {
   onMoveTask: (taskId: string, status: TaskStatus) => void
   onDeleteTask: (taskId: string) => void
   onCreate: () => void
-  onInviteMember: (member: UserSummary) => void
+  onMembersChange: (members: UserSummary[]) => void
 }
 
 const filters: { id: BoardFilter; label: string }[] = [
@@ -36,7 +36,7 @@ const USE_MOCKS = import.meta.env.VITE_USE_MOCKS !== 'false'
 
 type ProjectView = 'board' | 'list' | 'calendar' | 'progress' | 'activity'
 
-export function BoardPage({ board, columns, filter, onFilter, onOpenTask, onMoveTask, onDeleteTask, onCreate, onInviteMember }: BoardPageProps) {
+export function BoardPage({ board, columns, filter, onFilter, onOpenTask, onMoveTask, onDeleteTask, onCreate, onMembersChange }: BoardPageProps) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [meetingOpen, setMeetingOpen] = useState(false)
   const [meetingNotice, setMeetingNotice] = useState('')
@@ -108,7 +108,7 @@ export function BoardPage({ board, columns, filter, onFilter, onOpenTask, onMove
       {activeView === 'calendar' && <CalendarView tasks={visibleTasks} meetings={meetings} onOpenTask={onOpenTask} />}
       {activeView === 'progress' && <ProgressView columns={columns} tasks={visibleTasks} />}
       {activeView === 'activity' && <SystemLogView />}
-      {settingsOpen && <ProjectSettingsDrawer project={board.project} documents={documents} onInvite={onInviteMember} onUpload={uploadDocument} onDownload={USE_MOCKS ? undefined : (document) => projectApi.downloadDocument(board.project.id, document)} onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && <ProjectSettingsDrawer project={board.project} documents={documents} onMembersChange={onMembersChange} onUpload={uploadDocument} onDownload={USE_MOCKS ? undefined : (document) => projectApi.downloadDocument(board.project.id, document)} onClose={() => setSettingsOpen(false)} />}
       {meetingOpen && <CreateMeetingModal project={board.project} onClose={() => setMeetingOpen(false)} onCreate={createMeeting} />}
     </main>
   )

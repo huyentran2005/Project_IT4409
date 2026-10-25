@@ -7,6 +7,31 @@ export interface RolePermission {
   roles: ProjectRole[]
 }
 
+export interface ProjectMember {
+  id: string
+  name: string
+  email: string
+  avatarUrl?: string | null
+  initials: string
+  color: string
+  role: {
+    id: string
+    code: ProjectRole
+    name: string
+  }
+  joinedAt: string
+}
+
+export interface ProjectInvitation {
+  id: string
+  email: string
+  roleCode: ProjectRole
+  status: 'pending' | 'accepted' | 'expired'
+  expiresAt: string
+  createdAt: string
+  inviteUrl?: string | null
+}
+
 export interface ProjectDocument {
   id: string
   name: string

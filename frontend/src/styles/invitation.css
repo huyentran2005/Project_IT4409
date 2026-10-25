@@ -1,0 +1,162 @@
+.invitation-page {
+  display: grid;
+  min-height: 100vh;
+  padding: 32px 20px;
+  place-items: center;
+  background:
+    radial-gradient(circle at 18% 12%, rgb(99 102 241 / 13%), transparent 34%),
+    radial-gradient(circle at 88% 88%, rgb(14 165 233 / 9%), transparent 30%),
+    #f6f7fb;
+}
+
+.invitation-card {
+  width: min(100%, 560px);
+  overflow: hidden;
+  padding: 0 42px 40px;
+  border: 1px solid #e5e7ef;
+  border-radius: 24px;
+  text-align: left;
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 28px 80px rgb(30 41 59 / 14%);
+}
+
+.invitation-card__header {
+  display: flex;
+  min-height: 78px;
+  margin: 0 -42px 34px;
+  padding: 0 42px;
+  align-items: center;
+  gap: 11px;
+  border-bottom: 1px solid #eef0f5;
+  color: #32346f;
+  font-size: 15px;
+  font-weight: 850;
+}
+
+.invitation-card__brand {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  place-items: center;
+  color: white;
+  background: linear-gradient(145deg, #7067ee, #4f46dd);
+  font-size: 13px;
+  box-shadow: 0 8px 18px rgb(79 70 221 / 25%);
+}
+
+.invitation-card__eyebrow {
+  margin: 0 0 8px;
+  color: #5b5ce2;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.invitation-card h1 {
+  margin: 0;
+  color: #15182b;
+  font-size: clamp(28px, 6vw, 38px);
+  line-height: 1.16;
+  letter-spacing: -.035em;
+}
+
+.invitation-card__intro {
+  margin: 16px 0 26px;
+  color: #697084;
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.invitation-card__intro strong { color: #272b3f; }
+
+.invitation-project {
+  display: flex;
+  padding: 18px;
+  align-items: center;
+  gap: 15px;
+  border: 1px solid #e7e8f1;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #fafaff, #f6f7ff);
+}
+
+.invitation-project__icon {
+  display: grid;
+  flex: 0 0 54px;
+  width: 54px;
+  height: 54px;
+  border-radius: 15px;
+  place-items: center;
+  color: white;
+  font-size: 16px;
+  font-weight: 900;
+  box-shadow: 0 10px 24px rgb(52 55 110 / 18%);
+}
+
+.invitation-project__content { display: grid; min-width: 0; gap: 2px; }
+.invitation-project__content small { color: #8a90a3; font-size: 11px; font-weight: 750; text-transform: uppercase; }
+.invitation-project__content strong { overflow: hidden; color: #20243a; font-size: 18px; text-overflow: ellipsis; white-space: nowrap; }
+.invitation-project__content span { color: #747b8f; font-size: 13px; }
+
+.invitation-meta {
+  display: grid;
+  margin: 20px 0 0;
+  gap: 0;
+  border-top: 1px solid #eceef3;
+}
+
+.invitation-meta div {
+  display: grid;
+  padding: 13px 2px;
+  grid-template-columns: 170px minmax(0, 1fr);
+  gap: 18px;
+  border-bottom: 1px solid #eceef3;
+}
+
+.invitation-meta dt { color: #8a90a3; font-size: 12px; }
+.invitation-meta dd { overflow-wrap: anywhere; margin: 0; color: #34384c; font-size: 13px; font-weight: 700; text-align: right; }
+
+.invitation-loading {
+  padding: 72px 0;
+  color: #73798b;
+  text-align: center;
+}
+
+.invitation-actions {
+  display: grid;
+  margin-top: 28px;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 12px;
+}
+
+.invitation-actions button,
+.invitation-card > .primary-button {
+  min-height: 46px;
+  justify-content: center;
+  border-radius: 11px;
+}
+
+.invitation-card > .primary-button { width: 100%; margin-top: 24px; }
+
+.invitation-result {
+  margin: 22px 0 0;
+  padding: 13px 15px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.invitation-result--success { border-color: #b9eadf; color: #08705f; background: #ecfaf6; }
+.invitation-result--error { border-color: #fac9c5; color: #b42318; background: #fff2f1; }
+
+@media (max-width: 560px) {
+  .invitation-page { padding: 14px; }
+  .invitation-card { padding: 0 22px 26px; border-radius: 19px; }
+  .invitation-card__header { min-height: 68px; margin: 0 -22px 26px; padding: 0 22px; }
+  .invitation-meta div { grid-template-columns: 1fr; gap: 4px; }
+  .invitation-meta dd { text-align: left; }
+  .invitation-actions { grid-template-columns: 1fr; }
+}

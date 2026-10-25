@@ -12,13 +12,14 @@ import { AuthPage } from './pages/AuthPage'
 import { MyTasksPage } from './pages/MyTasksPage'
 import { OverviewPage } from './pages/OverviewPage'
 import { ProfilePage } from './pages/ProfilePage'
+import { InvitationPage } from './pages/InvitationPage'
 import { currentUser } from './data/mockData'
 import { authApi, type LoginPayload, type RegisterPayload, type SsoProvider } from './services/authApi'
 import { getTaskAssignees, type Task, type TaskComment, type TaskPropertiesUpdate, type TaskStatus, type TimesheetEntry, type UserSummary } from './types/task'
 
 function App() {
   const [authenticated, setAuthenticated] = useState(() => localStorage.getItem('taskflow-authenticated') === 'true')
-  const { board, projects, columns, query, setQuery, filter, setFilter, loading, selectProject, createProject, moveTask, addTask, deleteTask, inviteMember, logTime, addComment, updateReviewer, updateProperties } = useBoard('p-01', authenticated)
+  const { board, projects, columns, query, setQuery, filter, setFilter, loading, selectProject, createProject, moveTask, addTask, deleteTask, updateProjectMembers, logTime, addComment, updateReviewer, updateProperties } = useBoard('p-01', authenticated)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [pendingTaskMove, setPendingTaskMove] = useState<{ taskId: string; status: TaskStatus } | null>(null)
   const [creating, setCreating] = useState(false)
@@ -28,6 +29,8 @@ function App() {
   const [dark, setDark] = useState(false)
   const [activeSection, setActiveSection] = useState('Tổng quan')
   const useMocks = import.meta.env.VITE_USE_MOCKS !== 'false'
+  const invitationMatch = window.location.pathname.match(/^\/invitations\/([^/]+)$/)
+  const invitationToken = invitationMatch ? decodeURIComponent(invitationMatch[1]) : null
 
   const isTaskOverdue = (task: Task) => {
     const reference = task.completedAt ? new Date(task.completedAt) : new Date()
@@ -96,12 +99,21 @@ function App() {
           finishAuthentication()
         })
         .finally(() => {
-          window.history.replaceState({}, '', '/')
+          const pendingInvitation = localStorage.getItem('taskflow-pending-invitation')
+          if (pendingInvitation) {
+            localStorage.removeItem('taskflow-pending-invitation')
+            window.history.replaceState({}, '', `/invitations/${encodeURIComponent(pendingInvitation)}`)
+          } else {
+            window.history.replaceState({}, '', '/')
+          }
         })
     }
   }, [])
 
   const authenticateWithSso = (provider: SsoProvider) => {
+    if (invitationToken) {
+      localStorage.setItem('taskflow-pending-invitation', invitationToken)
+    }
     window.location.assign(authApi.getSsoUrl(provider))
   }
 
@@ -199,6 +211,7 @@ function App() {
   }
 
   if (!authenticated) return <AuthPage onAuthenticate={authenticate} onSso={authenticateWithSso} />
+  if (invitationToken) return <InvitationPage token={invitationToken} />
 
   return (
     <div className={`app${dark ? ' app--dark' : ''}${sidebarHidden ? ' app--sidebar-hidden' : ''}`}>
@@ -208,7 +221,7 @@ function App() {
         {loading && <div className="loading-state">Đang tải dữ liệu...</div>}
         {!loading && activeSection === 'Tổng quan' && <OverviewPage board={board} onOpenProject={() => setActiveSection('Dự án')} onOpenMyTasks={() => setActiveSection('Công việc của tôi')} onOpenTask={openTask} />}
         {!loading && activeSection === 'Công việc của tôi' && <MyTasksPage board={board} onOpenTask={openTask} />}
-        {!loading && activeSection === 'Dự án' && <BoardPage board={board} columns={columns} filter={filter} onFilter={setFilter} onOpenTask={openTask} onMoveTask={moveBoardTask} onDeleteTask={deleteTask} onCreate={() => setCreating(true)} onInviteMember={inviteMember} />}
+        {!loading && activeSection === 'Dự án' && <BoardPage board={board} columns={columns} filter={filter} onFilter={setFilter} onOpenTask={openTask} onMoveTask={moveBoardTask} onDeleteTask={deleteTask} onCreate={() => setCreating(true)} onMembersChange={updateProjectMembers} />}
         {!loading && activeSection === 'Hồ sơ' && <ProfilePage />}
       </div>
       {selectedTask && <TaskDrawer key={selectedTask.id} task={selectedTask} members={board.project.members} reviewRequested={pendingTaskMove?.taskId === selectedTask.id && pendingTaskMove.status === 'review' && !selectedTask.reviewer} overdueReasonRequired={pendingTaskMove?.taskId === selectedTask.id && isTaskOverdue(selectedTask) && !selectedTask.overdueReason?.trim()} onClose={() => { setSelectedTask(null); setPendingTaskMove(null) }} onMove={moveSelectedTask} onReviewerChange={changeReviewer} onUpdateProperties={changeProperties} onDelete={deleteSelectedTask} onLogTime={logSelectedTime} onAddComment={commentOnSelectedTask} />}

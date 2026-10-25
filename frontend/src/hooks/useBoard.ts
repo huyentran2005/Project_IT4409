@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { currentUser, initialBoard } from '../data/mockData'
 import { projectApi } from '../services/projectApi'
 import { taskApi } from '../services/taskApi'
+import type { ProjectMember } from '../types/project'
 import { getTaskAssignees, type BoardData, type BoardFilter, type CreateProjectInput, type CreateTaskInput, type ProjectSummary, type Task, type TaskComment, type TaskPropertiesUpdate, type TaskStatus, type TimesheetEntry, type UserSummary } from '../types/task'
 
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS !== 'false'
@@ -15,6 +16,15 @@ function getActiveUser(): UserSummary {
   }
   return currentUser
 }
+
+const memberToUserSummary = (member: ProjectMember): UserSummary => ({
+  id: member.id,
+  name: member.name,
+  email: member.email,
+  avatarUrl: member.avatarUrl ?? undefined,
+  initials: member.initials,
+  color: member.color,
+})
 
 export function useBoard(projectId = 'p-01', authenticated = true) {
   const [board, setBoard] = useState<BoardData>(initialBoard)
@@ -31,16 +41,33 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
       return
     }
     setLoading(true)
-    taskApi.getBoard(projectId)
-      .then((loadedBoard) => {
+    Promise.allSettled([
+      taskApi.getBoard(projectId),
+      projectApi.getMembers(projectId),
+    ])
+      .then(([boardResult, membersResult]) => {
+        const nextBoard = boardResult.status === 'fulfilled'
+          ? boardResult.value
+          : initialBoard
+        const members = membersResult.status === 'fulfilled'
+          ? membersResult.value.map(memberToUserSummary)
+          : nextBoard.project.members
+        const columns = nextBoard.columns.length > 0
+          ? nextBoard.columns
+          : initialBoard.columns.map((column) => ({ ...column, tasks: [] }))
+        const loadedBoard = {
+          ...nextBoard,
+          project: { ...nextBoard.project, members },
+          columns,
+        }
+
         boardCache.current[loadedBoard.project.id] = loadedBoard
         setBoard(loadedBoard)
         setProjects((current) => {
-          const withoutMock = current.filter((p) => p.id !== 'p-01' && p.id !== loadedBoard.project.id)
-          return [loadedBoard.project, ...withoutMock]
+          const withoutCurrent = current.filter((item) => item.id !== 'p-01' && item.id !== loadedBoard.project.id)
+          return [loadedBoard.project, ...withoutCurrent]
         })
       })
-      .catch(() => setBoard(initialBoard))
       .finally(() => setLoading(false))
   }, [projectId, authenticated])
 
@@ -162,12 +189,12 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
     }))
   }
 
-  const inviteMember = (member: UserSummary) => {
+  const updateProjectMembers = useCallback((members: UserSummary[]) => {
     setBoard((current) => ({
       ...current,
-      project: { ...current.project, members: [...current.project.members, member] },
+      project: { ...current.project, members },
     }))
-  }
+  }, [])
 
   const updateTask = (taskId: string, updater: (task: Task) => Task) => {
     setBoard((current) => ({ ...current, columns: current.columns.map((column) => ({ ...column, tasks: column.tasks.map((task) => task.id === taskId ? updater(task) : task) })) }))
@@ -209,5 +236,5 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
     }),
   })), [activeUserId, board.columns, filter, query])
 
-  return { board, projects, columns: filteredColumns, query, setQuery, filter, setFilter, loading, selectProject, createProject, moveTask, addTask, deleteTask, inviteMember, logTime, addComment, updateReviewer, updateProperties }
+  return { board, projects, columns: filteredColumns, query, setQuery, filter, setFilter, loading, selectProject, createProject, moveTask, addTask, deleteTask, updateProjectMembers, logTime, addComment, updateReviewer, updateProperties }
 }
