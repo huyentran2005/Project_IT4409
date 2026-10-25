@@ -4,6 +4,7 @@ from app.core.config import settings
 from app.api.auth import router as auth_router
 from app.api.project_members import invitation_router, router as project_member_router
 from app.api.project_content import router as project_content_router
+from app.api.tasks import router as tasks_router
 
 app = FastAPI(title=settings.PROJECT_NAME)
 
@@ -29,6 +30,7 @@ app.include_router(auth_router, prefix="/api")
 app.include_router(project_member_router, prefix="/api")
 app.include_router(invitation_router, prefix="/api")
 app.include_router(project_content_router, prefix="/api")
+app.include_router(tasks_router, prefix="/api")
 
 
 @app.get("/health")

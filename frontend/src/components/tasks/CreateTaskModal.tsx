@@ -12,7 +12,7 @@ interface CreateTaskModalProps {
   projectName: string
   members: UserSummary[]
   onClose: () => void
-  onCreate: (input: CreateTaskInput) => void
+  onCreate: (input: CreateTaskInput) => Promise<void> | void
 }
 
 export function CreateTaskModal({ projectName, members, onClose, onCreate }: CreateTaskModalProps) {
@@ -28,6 +28,8 @@ export function CreateTaskModal({ projectName, members, onClose, onCreate }: Cre
   const [assigneeQuery, setAssigneeQuery] = useState('')
   const [startDate, setStartDate] = useState(() => toDateInput(today))
   const [endDate, setEndDate] = useState(() => toDateInput(nextWeek))
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
   const assigneePickerRef = useRef<HTMLFieldSetElement>(null)
   const selectedMembers = useMemo(
     () => members.filter((member) => assigneeIds.includes(member.id)),
@@ -55,11 +57,19 @@ export function CreateTaskModal({ projectName, members, onClose, onCreate }: Cre
       ? current.filter((id) => id !== memberId)
       : [...current, memberId])
   }
-  const submit = (event: React.FormEvent) => {
+  const submit = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!title.trim() || !description.trim() || !startDate || !endDate || endDate < startDate) return
-    onCreate({ title: title.trim(), description: description.trim(), type, priority, assigneeIds, startDate, endDate })
-    onClose()
+    setError('')
+    setSubmitting(true)
+    try {
+      await onCreate({ title: title.trim(), description: description.trim(), type, priority, assigneeIds, startDate, endDate })
+      onClose()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Không thể tạo công việc. Vui lòng thử lại.')
+    } finally {
+      setSubmitting(false)
+    }
   }
   return (
     <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Tạo công việc">
@@ -130,7 +140,8 @@ export function CreateTaskModal({ projectName, members, onClose, onCreate }: Cre
           </div>}
         </fieldset>
         <div className="create-modal__fields"><label>Ngày bắt đầu<input type="date" required value={startDate} onChange={(event) => setStartDate(event.target.value)} /></label><label>Ngày kết thúc<input type="date" required min={startDate} value={endDate} onChange={(event) => setEndDate(event.target.value)} /></label></div>
-        <div className="create-modal__actions"><button type="button" className="secondary-button" onClick={onClose}>Hủy</button><button className="primary-button" type="submit">Tạo công việc</button></div>
+        {error && <p className="auth-error" role="alert">{error}</p>}
+        <div className="create-modal__actions"><button type="button" className="secondary-button" onClick={onClose}>Hủy</button><button className="primary-button" type="submit" disabled={submitting}>{submitting ? 'Đang tạo...' : 'Tạo công việc'}</button></div>
       </form>
     </div>
   )

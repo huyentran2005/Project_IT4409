@@ -6,7 +6,17 @@ import { getTaskAssignees, type BoardData, type BoardFilter, type CreateProjectI
 
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS !== 'false'
 
-export function useBoard(projectId = 'p-01') {
+function getActiveUser(): UserSummary {
+  try {
+    const raw = localStorage.getItem('taskflow-current-user')
+    if (raw) return JSON.parse(raw) as UserSummary
+  } catch {
+    // ignore invalid json
+  }
+  return currentUser
+}
+
+export function useBoard(projectId = 'p-01', authenticated = true) {
   const [board, setBoard] = useState<BoardData>(initialBoard)
   const [projects, setProjects] = useState<ProjectSummary[]>([initialBoard.project])
   const boardCache = useRef<Record<string, BoardData>>({ [initialBoard.project.id]: initialBoard })
@@ -16,11 +26,23 @@ export function useBoard(projectId = 'p-01') {
 
   useEffect(() => {
     if (USE_MOCKS) return
+    if (!authenticated || !localStorage.getItem('taskflow-token')) {
+      setLoading(false)
+      return
+    }
+    setLoading(true)
     taskApi.getBoard(projectId)
-      .then(setBoard)
+      .then((loadedBoard) => {
+        boardCache.current[loadedBoard.project.id] = loadedBoard
+        setBoard(loadedBoard)
+        setProjects((current) => {
+          const withoutMock = current.filter((p) => p.id !== 'p-01' && p.id !== loadedBoard.project.id)
+          return [loadedBoard.project, ...withoutMock]
+        })
+      })
       .catch(() => setBoard(initialBoard))
       .finally(() => setLoading(false))
-  }, [projectId])
+  }, [projectId, authenticated])
 
   const moveTask = (taskId: string, nextStatus: TaskStatus, reviewer?: UserSummary, properties?: TaskPropertiesUpdate) => {
     setBoard((current) => {
@@ -97,25 +119,40 @@ export function useBoard(projectId = 'p-01') {
     if (!USE_MOCKS) void projectApi.createProject(input)
   }
 
-  const addTask = (input: CreateTaskInput) => {
-    const assignees = board.project.members.filter((member) => input.assigneeIds.includes(member.id))
-    const newTask: Task = {
-      id: `local-${Date.now()}`,
-      key: `${board.project.key}-${130 + board.columns.flatMap((column) => column.tasks).length}`,
-      title: input.title,
-      description: input.description,
-      type: input.type, priority: input.priority, status: 'backlog', assignees,
-      labels: [], comments: 0, attachments: 0, checklist: { completed: 0, total: 0 },
-      startDate: input.startDate, endDate: input.endDate, timesheets: [], commentItems: [],
+  const addTask = async (input: CreateTaskInput) => {
+    if (USE_MOCKS) {
+      const assignees = board.project.members.filter((member) => input.assigneeIds.includes(member.id))
+      const newTask: Task = {
+        id: `local-${Date.now()}`,
+        key: `${board.project.key}-${130 + board.columns.flatMap((column) => column.tasks).length}`,
+        title: input.title,
+        description: input.description,
+        type: input.type, priority: input.priority, status: 'backlog', assignees,
+        labels: [], comments: 0, attachments: 0, checklist: { completed: 0, total: 0 },
+        startDate: input.startDate, endDate: input.endDate, timesheets: [], commentItems: [],
+      }
+      setBoard((current) => ({
+        ...current,
+        columns: current.columns.map((column) => column.id === 'backlog' ? { ...column, tasks: [newTask, ...column.tasks] } : column),
+      }))
+      return
     }
+    const created = await taskApi.createTask(board.project.id, { ...input, status: 'backlog' })
     setBoard((current) => ({
       ...current,
-      columns: current.columns.map((column) => column.id === 'backlog' ? { ...column, tasks: [newTask, ...column.tasks] } : column),
+      columns: current.columns.map((column) => column.id === created.status ? { ...column, tasks: [created, ...column.tasks] } : column),
     }))
-    if (!USE_MOCKS) void taskApi.createTask(projectId, { ...input, status: 'backlog' })
   }
 
-  const deleteTask = (taskId: string) => {
+  const deleteTask = async (taskId: string) => {
+    if (!USE_MOCKS) {
+      try {
+        await taskApi.deleteTask(taskId)
+      } catch (err) {
+        alert(err instanceof Error ? err.message : 'Không thể xóa công việc.')
+        return
+      }
+    }
     setBoard((current) => ({
       ...current,
       columns: current.columns.map((column) => ({
@@ -123,7 +160,6 @@ export function useBoard(projectId = 'p-01') {
         tasks: column.tasks.filter((task) => task.id !== taskId),
       })),
     }))
-    if (!USE_MOCKS) void taskApi.deleteTask(taskId)
   }
 
   const inviteMember = (member: UserSummary) => {
@@ -160,17 +196,18 @@ export function useBoard(projectId = 'p-01') {
     if (!USE_MOCKS) void taskApi.updateProperties(taskId, properties)
   }
 
+  const activeUserId = getActiveUser().id
   const filteredColumns = useMemo(() => board.columns.map((column) => ({
     ...column,
     tasks: column.tasks.filter((item) => {
       const matchesQuery = `${item.key} ${item.title} ${item.description} ${getTaskAssignees(item).map((member) => member.name).join(' ')}`.toLowerCase().includes(query.toLowerCase())
       const matchesFilter = filter === 'all'
-        || (filter === 'mine' && getTaskAssignees(item).some((member) => member.id === currentUser.id))
+        || (filter === 'mine' && getTaskAssignees(item).some((member) => member.id === activeUserId))
         || (filter === 'priority' && ['urgent', 'high'].includes(item.priority))
         || (filter === 'due-soon' && new Date(item.endDate) <= new Date('2026-10-20'))
       return matchesQuery && matchesFilter
     }),
-  })), [board.columns, filter, query])
+  })), [activeUserId, board.columns, filter, query])
 
   return { board, projects, columns: filteredColumns, query, setQuery, filter, setFilter, loading, selectProject, createProject, moveTask, addTask, deleteTask, inviteMember, logTime, addComment, updateReviewer, updateProperties }
 }

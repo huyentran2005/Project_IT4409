@@ -5,12 +5,10 @@ from datetime import datetime
 
 from sqlalchemy import (
     Boolean,
-    Column,
     DateTime,
     ForeignKey,
     Integer,
     String,
-    Table,
     Text,
     UniqueConstraint,
 )
@@ -21,29 +19,33 @@ from sqlalchemy.sql import func
 from app.db.session import Base
 
 
-# Bảng nối many-to-many giữa project_roles và permissions.
-project_role_permissions = Table(
-    "project_role_permissions",
-    Base.metadata,
-    Column(
-        "role_id",
+class ProjectRolePermission(Base):
+    __tablename__ = "project_role_permissions"
+
+    role_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("project_roles.id", ondelete="CASCADE"),
         primary_key=True,
-    ),
-    Column(
-        "permission_id",
+    )
+    permission_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("permissions.id", ondelete="CASCADE"),
         primary_key=True,
-    ),
-    Column(
-        "granted_at",
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    ),
-)
+    )
+    granted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    role: Mapped[ProjectRole] = relationship(
+        "ProjectRole", overlaps="permissions,roles"
+    )
+    permission: Mapped[Permission] = relationship(
+        "Permission", overlaps="permissions,roles"
+    )
+
+
+# Giữ API dạng Table cho các truy vấn hiện có qua project_role_permissions.c.*.
+project_role_permissions = ProjectRolePermission.__table__
 
 
 class Permission(Base):
@@ -75,6 +77,7 @@ class Permission(Base):
         "ProjectRole",
         secondary=project_role_permissions,
         back_populates="permissions",
+        overlaps="permission,role",
     )
 
 
@@ -155,4 +158,5 @@ class ProjectRole(Base):
         "Permission",
         secondary=project_role_permissions,
         back_populates="roles",
+        overlaps="permission,role",
     )

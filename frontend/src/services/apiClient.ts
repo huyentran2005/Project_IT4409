@@ -33,7 +33,7 @@ export function authHeaders(): Record<string, string> {
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
-      headers: { 'Content-Type': 'application/json', ...authHeaders(), ...options.headers },
+    headers: { 'Content-Type': 'application/json', ...authHeaders(), ...options.headers },
   })
 
   if (!response.ok) {
