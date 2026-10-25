@@ -63,6 +63,7 @@ function App() {
       ? await authApi.login({ email: data.email, password: data.password } satisfies LoginPayload)
       : await authApi.register({ name: data.name ?? '', email: data.email, phone: data.phone, password: data.password } satisfies RegisterPayload)
     localStorage.setItem('taskflow-token', response.accessToken)
+    localStorage.setItem('taskflow-refresh-token', response.refreshToken)
     localStorage.setItem('taskflow-current-user', JSON.stringify(response.user))
     finishAuthentication()
   }
@@ -106,9 +107,10 @@ function App() {
 
 
   const logout = () => {
-    if (!useMocks) void authApi.logout().catch(() => undefined)
+    if (!useMocks) void authApi.logout(localStorage.getItem('taskflow-refresh-token')).catch(() => undefined)
     localStorage.removeItem('taskflow-authenticated')
     localStorage.removeItem('taskflow-token')
+    localStorage.removeItem('taskflow-refresh-token')
     localStorage.removeItem('taskflow-current-user')
     setAuthenticated(false)
   }

@@ -18,7 +18,22 @@ from app.services.github_oauth import (
     exchange_github_code,
     get_github_user_info,
 )
-from app.services.auth_service import handle_google_login, handle_github_login
+from app.schemas.auth import (
+    AuthResponse,
+    LoginRequest,
+    LogoutRequest,
+    RefreshRequest,
+    RegisterRequest,
+)
+from app.services.auth_service import (
+    AuthError,
+    handle_google_login,
+    handle_github_login,
+    login_with_password,
+    refresh_session,
+    register_with_password,
+    revoke_session,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -257,15 +272,82 @@ def get_current_user_profile(current_user: User = Depends(get_current_user)):
     return user_to_summary(current_user)
 
 
+_AUTH_STATUS = {
+    "invalid_credentials": status.HTTP_401_UNAUTHORIZED,
+    "invalid_token": status.HTTP_401_UNAUTHORIZED,
+    "expired": status.HTTP_401_UNAUTHORIZED,
+    "inactive": status.HTTP_403_FORBIDDEN,
+    "email_taken": status.HTTP_409_CONFLICT,
+}
+
+
+def _raise(err: AuthError):
+    raise HTTPException(
+        status_code=_AUTH_STATUS.get(err.code, status.HTTP_400_BAD_REQUEST),
+        detail=err.message,
+    )
+
+
+def _client_meta(request: Request) -> tuple[str | None, str | None]:
+    return (request.client.host if request.client else None, request.headers.get("user-agent"))
+
+
+@router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
+def register(body: RegisterRequest, request: Request, db: Session = Depends(get_db)):
+    """
+    Đăng ký tài khoản bằng email + mật khẩu.
+
+    Input: JSON {name, email, phone?, password (>= 8 ký tự)}.
+    Output: 201 {accessToken, refreshToken, user}; 409 nếu email đã tồn tại; 422 nếu dữ liệu sai.
+    """
+    ip, ua = _client_meta(request)
+    try:
+        access, refresh, user = register_with_password(
+            db, name=body.name, email=body.email, password=body.password,
+            phone=body.phone, client_ip=ip, user_agent=ua,
+        )
+    except AuthError as err:
+        _raise(err)
+    return AuthResponse(accessToken=access, refreshToken=refresh, user=user_to_summary(user))
+
+
+@router.post("/login", response_model=AuthResponse)
+def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    """
+    Đăng nhập bằng email + mật khẩu.
+
+    Input: JSON {email, password}.
+    Output: 200 {accessToken, refreshToken, user}; 401 sai thông tin; 403 tài khoản bị khóa.
+    """
+    ip, ua = _client_meta(request)
+    try:
+        access, refresh, user = login_with_password(
+            db, email=body.email, password=body.password, client_ip=ip, user_agent=ua
+        )
+    except AuthError as err:
+        _raise(err)
+    return AuthResponse(accessToken=access, refreshToken=refresh, user=user_to_summary(user))
+
+
+@router.post("/refresh", response_model=AuthResponse)
+def refresh(body: RefreshRequest, request: Request, db: Session = Depends(get_db)):
+    """Đổi refresh token lấy cặp token mới (rotation). 401 nếu token sai/hết hạn/đã thu hồi."""
+    ip, ua = _client_meta(request)
+    try:
+        access, new_refresh, user = refresh_session(
+            db, refresh_token=body.refreshToken, client_ip=ip, user_agent=ua
+        )
+    except AuthError as err:
+        _raise(err)
+    return AuthResponse(accessToken=access, refreshToken=new_refresh, user=user_to_summary(user))
+
+
 @router.post("/logout")
-def logout():
+def logout(body: LogoutRequest | None = None, db: Session = Depends(get_db)):
     """
-    Đăng xuất người dùng khỏi hệ thống.
+    Đăng xuất: thu hồi refresh token (nếu gửi kèm) trong auth_sessions.
 
-    Input (Đầu vào):
-        - Không bắt buộc tham số.
-
-    Output (Đầu ra):
-        - Status 200 OK: Trả về đối tượng {"status": "ok"}.
+    Input: JSON tùy chọn {refreshToken}. Output: 200 {"status": "ok"}.
     """
+    revoke_session(db, body.refreshToken if body else None)
     return {"status": "ok"}

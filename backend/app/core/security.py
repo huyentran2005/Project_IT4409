@@ -3,7 +3,28 @@ import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import Any
 import jwt
+from pwdlib import PasswordHash
 from app.core.config import settings
+
+# Argon2id - khớp yêu cầu SRS: băm mật khẩu bcrypt/argon2
+_password_hash = PasswordHash.recommended()
+# Hash giả để verify khi email không tồn tại -> thời gian phản hồi không lộ email có tồn tại hay không
+_DUMMY_HASH = _password_hash.hash("dummy-password-for-timing")
+
+
+def hash_password(password: str) -> str:
+    return _password_hash.hash(password)
+
+
+def verify_password(password: str, password_hash: str | None) -> bool:
+    """Trả về True nếu mật khẩu khớp. password_hash=None (tài khoản chỉ SSO) luôn trả False."""
+    if not password_hash:
+        _password_hash.verify(password, _DUMMY_HASH)
+        return False
+    try:
+        return _password_hash.verify(password, password_hash)
+    except Exception:
+        return False
 
 
 def create_access_token(subject: str | Any, expires_delta: timedelta | None = None) -> str:

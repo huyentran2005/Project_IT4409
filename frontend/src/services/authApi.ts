@@ -13,6 +13,7 @@ export interface RegisterPayload extends LoginPayload {
 
 export interface AuthResponse {
   accessToken: string
+  refreshToken: string
   user: UserSummary
 }
 
@@ -33,8 +34,11 @@ export const authApi = {
       headers: { Authorization: `Bearer ${token}` },
     })
   },
-  logout() {
-    return apiRequest<void>('/api/auth/logout', { method: 'POST' })
+ logout(refreshToken?: string | null) {
+    return apiRequest<void>('/api/auth/logout', {
+      method: 'POST',
+      body: JSON.stringify({ refreshToken: refreshToken ?? null }),
+    })
   },
 }
 
