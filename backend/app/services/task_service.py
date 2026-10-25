@@ -36,9 +36,9 @@ _DEFAULT_PERMISSIONS = [
 ]
 
 _DEFAULT_STATUSES = [
-    ("backlog", "Cần làm", "todo", "#64748b", Decimal("1000"), 8),
-    ("in-progress", "Đang làm", "in_progress", "#2563eb", Decimal("2000"), 4),
-    ("review", "Đang duyệt", "in_progress", "#d97706", Decimal("3000"), 3),
+    ("backlog", "Cần làm", "todo", "#64748b", Decimal("1000"), None),
+    ("in-progress", "Đang làm", "in_progress", "#2563eb", Decimal("2000"), None),
+    ("review", "Đang duyệt", "in_progress", "#d97706", Decimal("3000"), None),
     ("done", "Hoàn thành", "done", "#0f9f8f", Decimal("4000"), None),
 ]
 
