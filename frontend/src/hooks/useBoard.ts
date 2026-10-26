@@ -123,13 +123,11 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
     }
   }
 
-  const createProject = (input: CreateProjectInput) => {
-    const project: ProjectSummary = {
-      id: `project-${Date.now()}`,
-      ...input,
-      progress: 0,
-      members: [currentUser],
-    }
+  const createProject = async (input: CreateProjectInput) => {
+    // Chế độ thật: gọi API trước, dùng id/thành viên backend trả về; lỗi (409, 422...) được ném cho form hiển thị
+    const project: ProjectSummary = USE_MOCKS
+      ? { id: `project-${Date.now()}`, ...input, progress: 0, members: [currentUser] }
+      : await projectApi.createProject(input)
     const newBoard: BoardData = {
       project,
       columns: [
@@ -143,7 +141,6 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
     boardCache.current[project.id] = newBoard
     setProjects((current) => [...current, project])
     setBoard(newBoard)
-    if (!USE_MOCKS) void projectApi.createProject(input)
   }
 
   const addTask = async (input: CreateTaskInput) => {
