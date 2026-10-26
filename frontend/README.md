@@ -9,14 +9,13 @@ npm install
 npm run dev
 ```
 
-Mặc định giao diện dùng dữ liệu mẫu. Sao chép `.env.example` thành `.env` và đặt `VITE_USE_MOCKS=false` để gọi FastAPI thật tại `VITE_API_URL`.
+Giao diện gọi FastAPI tại địa chỉ được cấu hình bởi `VITE_API_URL`.
 
 ## Cấu trúc
 
 ```text
 src/
 ├── components/       # Component layout, board, task và UI dùng lại
-├── data/mockData.ts  # Nguồn duy nhất chứa toàn bộ dữ liệu giả lập
 ├── hooks/            # State và nghiệp vụ giao diện
 ├── pages/            # Thành phần cấp trang
 ├── services/         # Toàn bộ lời gọi HTTP tới backend

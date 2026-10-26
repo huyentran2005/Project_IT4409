@@ -1,20 +1,12 @@
-import { currentUser } from '../data/mockData'
 import { getTaskAssignees, type BoardData, type Task } from '../types/task'
 import { Icon } from '../components/ui/Icon'
+import { getStoredUser } from '../utils/session'
 
 const dateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 const formatMinutes = (minutes: number) => `${Math.floor(minutes / 60)}h ${minutes % 60}m`
 
 export function MyTasksPage({ board, onOpenTask }: { board: BoardData; onOpenTask: (task: Task) => void }) {
-  const activeUserId = (() => {
-    try {
-      const raw = localStorage.getItem('taskflow-current-user')
-      if (raw) return (JSON.parse(raw) as { id?: string }).id ?? currentUser.id
-    } catch {
-      // ignore
-    }
-    return currentUser.id
-  })()
+  const activeUserId = getStoredUser().id
   const now = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const weekEnd = new Date(today); weekEnd.setDate(today.getDate() + 7); weekEnd.setHours(23, 59, 59, 999)

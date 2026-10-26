@@ -1,17 +1,10 @@
-import { currentUser } from '../data/mockData'
 import { getTaskAssignees, type BoardData, type Task } from '../types/task'
 import { Avatar } from '../components/ui/Avatar'
 import { Icon } from '../components/ui/Icon'
+import { getStoredUser } from '../utils/session'
 
 export function OverviewPage({ board, onOpenProject, onOpenMyTasks, onOpenTask }: { board: BoardData; onOpenProject: () => void; onOpenMyTasks: () => void; onOpenTask: (task: Task) => void }) {
-  const displayUser = (() => {
-    try {
-      const savedUser = JSON.parse(localStorage.getItem('taskflow-current-user') ?? 'null')
-      return savedUser?.name ? { ...currentUser, ...savedUser } : currentUser
-    } catch {
-      return currentUser
-    }
-  })()
+  const displayUser = getStoredUser()
   const tasks = board.columns.flatMap((column) => column.tasks)
   const myTasks = tasks.filter((task) => getTaskAssignees(task).some((member) => member.id === displayUser.id) && task.status !== 'done')
   const overdue = tasks.filter((task) => task.status !== 'done' && new Date(task.endDate) < new Date('2026-10-16'))

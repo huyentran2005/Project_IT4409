@@ -1,20 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { currentUser, initialBoard } from '../data/mockData'
 import { projectApi } from '../services/projectApi'
 import { taskApi } from '../services/taskApi'
 import type { ProjectMember } from '../types/project'
 import { getTaskAssignees, type BoardData, type BoardFilter, type CreateProjectInput, type CreateTaskInput, type ProjectSummary, type Task, type TaskComment, type TaskPropertiesUpdate, type TaskStatus, type TimesheetEntry, type UserSummary } from '../types/task'
+import { getStoredUser } from '../utils/session'
 
-const USE_MOCKS = import.meta.env.VITE_USE_MOCKS !== 'false'
+const emptyBoard: BoardData = {
+  project: {
+    id: 'p-01',
+    key: '',
+    name: 'Đang tải...',
+    description: '',
+    color: '#64748b',
+    progress: 0,
+    members: [],
+  },
+  columns: [
+    { id: 'backlog', title: 'Cần làm', accent: '#64748b', tasks: [] },
+    { id: 'in-progress', title: 'Đang làm', accent: '#2563eb', tasks: [] },
+    { id: 'review', title: 'Đang duyệt', accent: '#d97706', tasks: [] },
+    { id: 'done', title: 'Hoàn thành', accent: '#0f9f8f', tasks: [] },
+  ],
+}
 
 function getActiveUser(): UserSummary {
-  try {
-    const raw = localStorage.getItem('taskflow-current-user')
-    if (raw) return JSON.parse(raw) as UserSummary
-  } catch {
-    // ignore invalid json
-  }
-  return currentUser
+  return getStoredUser()
 }
 
 const memberToUserSummary = (member: ProjectMember): UserSummary => ({
@@ -27,20 +37,15 @@ const memberToUserSummary = (member: ProjectMember): UserSummary => ({
 })
 
 export function useBoard(projectId = 'p-01', authenticated = true) {
-  const [board, setBoard] = useState<BoardData>(initialBoard)
-  const [projects, setProjects] = useState<ProjectSummary[]>([initialBoard.project])
-  const boardCache = useRef<Record<string, BoardData>>({ [initialBoard.project.id]: initialBoard })
+  const [board, setBoard] = useState<BoardData>(emptyBoard)
+  const [projects, setProjects] = useState<ProjectSummary[]>([])
+  const boardCache = useRef<Record<string, BoardData>>({})
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<BoardFilter>('all')
-  const [loading, setLoading] = useState(!USE_MOCKS)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (USE_MOCKS) return
-    if (!authenticated || !localStorage.getItem('taskflow-token')) {
-      setLoading(false)
-      return
-    }
-    setLoading(true)
+    if (!authenticated || !localStorage.getItem('taskflow-token')) return
     Promise.allSettled([
       taskApi.getBoard(projectId),
       projectApi.getMembers(projectId),
@@ -48,13 +53,13 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
       .then(([boardResult, membersResult]) => {
         const nextBoard = boardResult.status === 'fulfilled'
           ? boardResult.value
-          : initialBoard
+          : emptyBoard
         const members = membersResult.status === 'fulfilled'
           ? membersResult.value.map(memberToUserSummary)
           : nextBoard.project.members
         const columns = nextBoard.columns.length > 0
           ? nextBoard.columns
-          : initialBoard.columns.map((column) => ({ ...column, tasks: [] }))
+          : emptyBoard.columns.map((column) => ({ ...column, tasks: [] }))
         const loadedBoard = {
           ...nextBoard,
           project: { ...nextBoard.project, members },
@@ -64,7 +69,7 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
         boardCache.current[loadedBoard.project.id] = loadedBoard
         setBoard(loadedBoard)
         setProjects((current) => {
-          const withoutCurrent = current.filter((item) => item.id !== 'p-01' && item.id !== loadedBoard.project.id)
+          const withoutCurrent = current.filter((item) => item.id !== loadedBoard.project.id)
           return [loadedBoard.project, ...withoutCurrent]
         })
       })
@@ -101,7 +106,7 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
         })),
       }
     })
-    if (!USE_MOCKS) void taskApi.moveTask(taskId, nextStatus, 0, reviewer?.id, properties)
+    void taskApi.moveTask(taskId, nextStatus, 0, reviewer?.id, properties)
   }
 
   const selectProject = (nextProjectId: string) => {
@@ -112,22 +117,17 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
       setBoard(cachedBoard)
       return
     }
-    if (!USE_MOCKS) {
-      setLoading(true)
-      taskApi.getBoard(nextProjectId)
-        .then((nextBoard) => {
-          boardCache.current[nextProjectId] = nextBoard
-          setBoard(nextBoard)
-        })
-        .finally(() => setLoading(false))
-    }
+    setLoading(true)
+    taskApi.getBoard(nextProjectId)
+      .then((nextBoard) => {
+        boardCache.current[nextProjectId] = nextBoard
+        setBoard(nextBoard)
+      })
+      .finally(() => setLoading(false))
   }
 
   const createProject = async (input: CreateProjectInput) => {
-    // Chế độ thật: gọi API trước, dùng id/thành viên backend trả về; lỗi (409, 422...) được ném cho form hiển thị
-    const project: ProjectSummary = USE_MOCKS
-      ? { id: `project-${Date.now()}`, ...input, progress: 0, members: [currentUser] }
-      : await projectApi.createProject(input)
+    const project: ProjectSummary = await projectApi.createProject(input)
     const newBoard: BoardData = {
       project,
       columns: [
@@ -144,23 +144,6 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
   }
 
   const addTask = async (input: CreateTaskInput) => {
-    if (USE_MOCKS) {
-      const assignees = board.project.members.filter((member) => input.assigneeIds.includes(member.id))
-      const newTask: Task = {
-        id: `local-${Date.now()}`,
-        key: `${board.project.key}-${130 + board.columns.flatMap((column) => column.tasks).length}`,
-        title: input.title,
-        description: input.description,
-        type: input.type, priority: input.priority, status: 'backlog', assignees,
-        labels: [], comments: 0, attachments: 0, checklist: { completed: 0, total: 0 },
-        startDate: input.startDate, endDate: input.endDate, timesheets: [], commentItems: [],
-      }
-      setBoard((current) => ({
-        ...current,
-        columns: current.columns.map((column) => column.id === 'backlog' ? { ...column, tasks: [newTask, ...column.tasks] } : column),
-      }))
-      return
-    }
     const created = await taskApi.createTask(board.project.id, { ...input, status: 'backlog' })
     setBoard((current) => ({
       ...current,
@@ -169,13 +152,11 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
   }
 
   const deleteTask = async (taskId: string) => {
-    if (!USE_MOCKS) {
-      try {
-        await taskApi.deleteTask(taskId)
-      } catch (err) {
-        alert(err instanceof Error ? err.message : 'Không thể xóa công việc.')
-        return
-      }
+    try {
+      await taskApi.deleteTask(taskId)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Không thể xóa công việc.')
+      return
     }
     setBoard((current) => ({
       ...current,
@@ -201,7 +182,7 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
   const addComment = (taskId: string, comment: TaskComment) => updateTask(taskId, (task) => ({ ...task, comments: task.comments + 1, commentItems: [...task.commentItems, comment] }))
   const updateReviewer = (taskId: string, reviewer: UserSummary) => {
     updateTask(taskId, (task) => ({ ...task, reviewer }))
-    if (!USE_MOCKS) void taskApi.setReviewer(taskId, reviewer.id)
+    void taskApi.setReviewer(taskId, reviewer.id)
   }
   const updateProperties = (taskId: string, properties: TaskPropertiesUpdate) => {
     setBoard((current) => {
@@ -217,7 +198,7 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
         acceptanceResult: properties.acceptanceResult || undefined,
       } : task) })) }
     })
-    if (!USE_MOCKS) void taskApi.updateProperties(taskId, properties)
+    void taskApi.updateProperties(taskId, properties)
   }
 
   const activeUserId = getActiveUser().id

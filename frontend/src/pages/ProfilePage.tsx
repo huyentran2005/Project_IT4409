@@ -2,22 +2,18 @@ import { useEffect, useState } from 'react'
 import { authApi } from '../services/authApi'
 import { Avatar } from '../components/ui/Avatar'
 import { Icon } from '../components/ui/Icon'
-import { currentUser } from '../data/mockData'
 import { accountApi } from '../services/accountApi'
-
-const USE_MOCKS = import.meta.env.VITE_USE_MOCKS !== 'false'
+import { getStoredUser } from '../utils/session'
 
 type ProfileTab = 'account' | 'security'
 
 export function ProfilePage() {
-  const savedUser = (() => {
-    try { return JSON.parse(localStorage.getItem('taskflow-current-user') ?? 'null') ?? currentUser } catch { return currentUser }
-  })()
+  const savedUser = getStoredUser()
   const [tab, setTab] = useState<ProfileTab>('account')
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(savedUser.name)
   const [email, setEmail] = useState(savedUser.email)
-  const [phone, setPhone] = useState(savedUser.phone ?? '')
+  const [phone, setPhone] = useState('')
   const [profileReady, setProfileReady] = useState(false)//thêm state profile
   const [saving, setSaving] = useState(false)//thêm state saving
   const [message, setMessage] = useState('')
@@ -104,20 +100,18 @@ export function ProfilePage() {
       setMessage('Mật khẩu nhập lại chưa khớp.')
       return
     }
-    if (!USE_MOCKS) {
-      setSavingPassword(true)
-      try {
-        await accountApi.changePassword({
-          currentPassword: currentPassword || undefined,
-          newPassword: password,
-          refreshToken: localStorage.getItem('taskflow-refresh-token') ?? undefined,
-        })
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : 'Không thể đổi mật khẩu. Vui lòng thử lại.')
-        return
-      } finally {
-        setSavingPassword(false)
-      }
+    setSavingPassword(true)
+    try {
+      await accountApi.changePassword({
+        currentPassword: currentPassword || undefined,
+        newPassword: password,
+        refreshToken: localStorage.getItem('taskflow-refresh-token') ?? undefined,
+      })
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Không thể đổi mật khẩu. Vui lòng thử lại.')
+      return
+    } finally {
+      setSavingPassword(false)
     }
     formElement.reset()
     setMessage('Đã đổi mật khẩu thành công.')

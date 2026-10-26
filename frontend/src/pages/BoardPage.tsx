@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import type { BoardData, BoardFilter, Task, TaskStatus, UserSummary } from '../types/task'
 import type { Meeting, MeetingDraft } from '../types/meeting'
 import type { ProjectDocument } from '../types/project'
-import { mockMeetings, mockProjectDocuments } from '../data/mockData'
 import { meetingApi } from '../services/meetingApi'
 import { projectApi } from '../services/projectApi'
 import { BoardColumn } from '../components/board/BoardColumn'
@@ -32,8 +31,6 @@ const filters: { id: BoardFilter; label: string }[] = [
   { id: 'priority', label: 'Ưu tiên cao' }, { id: 'due-soon', label: 'Sắp đến hạn' },
 ]
 
-const USE_MOCKS = import.meta.env.VITE_USE_MOCKS !== 'false'
-
 type ProjectView = 'board' | 'list' | 'calendar' | 'progress' | 'activity'
 
 export function BoardPage({ board, columns, filter, onFilter, onOpenTask, onMoveTask, onDeleteTask, onCreate, onMembersChange }: BoardPageProps) {
@@ -41,41 +38,22 @@ export function BoardPage({ board, columns, filter, onFilter, onOpenTask, onMove
   const [meetingOpen, setMeetingOpen] = useState(false)
   const [meetingNotice, setMeetingNotice] = useState('')
   const [activeView, setActiveView] = useState<ProjectView>('board')
-  const [meetings, setMeetings] = useState<Meeting[]>(() => {
-    if (!USE_MOCKS) return []
-    try {
-      const stored = localStorage.getItem(`taskflow-meetings-${board.project.id}`)
-      return stored ? JSON.parse(stored) as Meeting[] : mockMeetings
-    } catch {
-      return mockMeetings
-    }
-  })
-  const [documents, setDocuments] = useState<ProjectDocument[]>(USE_MOCKS ? mockProjectDocuments : [])
+  const [meetings, setMeetings] = useState<Meeting[]>([])
+  const [documents, setDocuments] = useState<ProjectDocument[]>([])
   const [filtersOpen, setFiltersOpen] = useState(false)
   const total = board.columns.reduce((sum, column) => sum + column.tasks.length, 0)
   const done = board.columns.find((column) => column.id === 'done')?.tasks.length ?? 0
   const visibleTasks = columns.flatMap((column) => column.tasks)
   useEffect(() => {
-    if (USE_MOCKS) localStorage.setItem(`taskflow-meetings-${board.project.id}`, JSON.stringify(meetings))
-  }, [board.project.id, meetings])
-  useEffect(() => {
-    if (USE_MOCKS) return
     meetingApi.list(board.project.id).then(setMeetings).catch(() => setMeetings([]))
     projectApi.getDocuments(board.project.id).then(setDocuments).catch(() => setDocuments([]))
   }, [board.project.id])
   const uploadDocument = async (file: File) => {
-    if (USE_MOCKS) {
-      const type = file.name.split('.').pop()?.toUpperCase() ?? 'FILE'
-      const size = `${Math.max(file.size / 1024 / 1024, .01).toFixed(2)} MB`
-      setDocuments((current) => [{ id: `document-${Date.now()}`, name: file.name, type, size, updatedAt: new Date().toISOString(), updatedBy: 'Minh Anh' }, ...current])
-      return
-    }
     const created = await projectApi.uploadDocument(board.project.id, file)
     setDocuments((current) => [created, ...current])
   }
   const createMeeting = async (draft: MeetingDraft) => {
-    // Chế độ thật: gọi API (lỗi được ném ra để modal hiển thị); chế độ mock: tạo cục bộ
-    const meeting = USE_MOCKS ? { ...draft, id: `meeting-${Date.now()}`, projectId: board.project.id } : await meetingApi.create(board.project.id, draft)
+    const meeting = await meetingApi.create(board.project.id, draft)
     setMeetings((current) => [...current, meeting])
     setMeetingNotice(`Đã tạo “${meeting.title}” lúc ${meeting.startTime}, ngày ${new Intl.DateTimeFormat('vi-VN').format(new Date(meeting.date))}`)
     setActiveView('calendar')
@@ -107,8 +85,8 @@ export function BoardPage({ board, columns, filter, onFilter, onOpenTask, onMove
       {activeView === 'list' && <TaskListView tasks={visibleTasks} onOpenTask={onOpenTask} />}
       {activeView === 'calendar' && <CalendarView tasks={visibleTasks} meetings={meetings} onOpenTask={onOpenTask} />}
       {activeView === 'progress' && <ProgressView columns={columns} tasks={visibleTasks} />}
-      {activeView === 'activity' && <SystemLogView />}
-      {settingsOpen && <ProjectSettingsDrawer project={board.project} documents={documents} onMembersChange={onMembersChange} onUpload={uploadDocument} onDownload={USE_MOCKS ? undefined : (document) => projectApi.downloadDocument(board.project.id, document)} onClose={() => setSettingsOpen(false)} />}
+      {activeView === 'activity' && <SystemLogView projectId={board.project.id} />}
+      {settingsOpen && <ProjectSettingsDrawer project={board.project} documents={documents} onMembersChange={onMembersChange} onUpload={uploadDocument} onDownload={(document) => projectApi.downloadDocument(board.project.id, document)} onClose={() => setSettingsOpen(false)} />}
       {meetingOpen && <CreateMeetingModal project={board.project} onClose={() => setMeetingOpen(false)} onCreate={createMeeting} />}
     </main>
   )

@@ -1,10 +1,17 @@
 import { useState } from 'react'
 import { getTaskAssignees, type Task, type TaskComment, type TaskPriority, type TaskPropertiesUpdate, type TaskStatus, type TimesheetEntry, type UserSummary } from '../../types/task'
-import { currentUser, mockStatusOptions } from '../../data/mockData'
 import { Avatar } from '../ui/Avatar'
 import { Icon } from '../ui/Icon'
 import { ReviewerPicker } from './ReviewerPicker'
 import { AssigneePicker } from './AssigneePicker'
+import { getStoredUser } from '../../utils/session'
+
+const statusOptions: { id: TaskStatus; label: string }[] = [
+  { id: 'backlog', label: 'Cần làm' },
+  { id: 'in-progress', label: 'Đang làm' },
+  { id: 'review', label: 'Đang duyệt' },
+  { id: 'done', label: 'Hoàn thành' },
+]
 
 const formatDate = (date: string) => new Intl.DateTimeFormat('vi-VN').format(new Date(date))
 const formatTime = (date: string) => new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit' }).format(new Date(date))
@@ -25,6 +32,7 @@ interface TaskDrawerProps {
 }
 
 export function TaskDrawer({ task, members, reviewRequested, overdueReasonRequired, onClose, onMove, onReviewerChange, onUpdateProperties, onDelete, onLogTime, onAddComment }: TaskDrawerProps) {
+  const currentUser = getStoredUser()
   const [activeTab, setActiveTab] = useState<'timesheet' | 'comments'>('timesheet')
   const [menuOpen, setMenuOpen] = useState(false)
   const [logging, setLogging] = useState(false)
@@ -95,7 +103,7 @@ export function TaskDrawer({ task, members, reviewRequested, overdueReasonRequir
           <h2>{task.title}</h2>
           <div className="detail-grid">
             <span>Mô tả</span><textarea className="task-property-input" required value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Nhập mô tả công việc..." />
-            <span>Trạng thái</span><select value={task.status} onChange={(event) => onMove(event.target.value as TaskStatus)}>{mockStatusOptions.map((status) => <option value={status.id} key={status.id}>{status.label}</option>)}</select>
+            <span>Trạng thái</span><select value={task.status} onChange={(event) => onMove(event.target.value as TaskStatus)}>{statusOptions.map((status) => <option value={status.id} key={status.id}>{status.label}</option>)}</select>
             <span>Người thực hiện</span><AssigneePicker members={members} selectedIds={assigneeIds} onChange={setAssigneeIds} />
             {(task.status === 'review' || reviewRequested || task.reviewer) && <><span>Người duyệt</span><ReviewerPicker members={members} reviewer={task.reviewer} required={reviewRequested || task.status === 'review'} onChange={onReviewerChange} /></>}
             <span>Ưu tiên</span><select value={priority} onChange={(event) => setPriority(event.target.value as TaskPriority)}><option value="urgent">Khẩn cấp</option><option value="high">Cao</option><option value="medium">Trung bình</option><option value="low">Thấp</option></select>

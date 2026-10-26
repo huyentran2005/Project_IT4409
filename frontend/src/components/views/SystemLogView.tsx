@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
-import { mockActivityLogs } from '../../data/mockData'
+import { useEffect, useMemo, useState } from 'react'
 import type { ActivityLog } from '../../types/project'
+import { projectApi } from '../../services/projectApi'
 import { Icon } from '../ui/Icon'
 
 const actionLabels: Record<ActivityLog['action'], string> = {
@@ -15,17 +15,23 @@ const relativeTime = (date: string) => {
   return new Intl.DateTimeFormat('vi-VN').format(new Date(date))
 }
 
-export function SystemLogView() {
+export function SystemLogView({ projectId }: { projectId: string }) {
   const [action, setAction] = useState('all')
   const [entity, setEntity] = useState('all')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
-  const logs = useMemo(() => mockActivityLogs.filter((log) => (
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([])
+
+  useEffect(() => {
+    projectApi.getActivityLogs(projectId).then(setActivityLogs).catch(() => setActivityLogs([]))
+  }, [projectId])
+
+  const logs = useMemo(() => activityLogs.filter((log) => (
     (action === 'all' || log.action === action)
     && (entity === 'all' || log.entityType === entity)
     && (!fromDate || new Date(log.createdAt) >= new Date(`${fromDate}T00:00:00`))
     && (!toDate || new Date(log.createdAt) <= new Date(`${toDate}T23:59:59`))
-  )), [action, entity, fromDate, toDate])
+  )), [action, activityLogs, entity, fromDate, toDate])
 
   return (
     <section className="system-log-view">

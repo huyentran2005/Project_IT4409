@@ -1,6 +1,10 @@
 import { Icon } from '../ui/Icon'
-import { mockNavigation } from '../../data/mockData'
 import type { ProjectSummary } from '../../types/task'
+
+const navigation = [
+  { icon: 'grid', label: 'Tổng quan' },
+  { icon: 'check', label: 'Công việc của tôi' },
+]
 
 interface AppSidebarProps {
   open: boolean
@@ -26,11 +30,10 @@ export function AppSidebar({ open, activeSection, activeProjectId, projects, onN
 
         <nav className="sidebar__nav" aria-label="Điều hướng chính">
           <div className="nav-group">
-            {mockNavigation.map((link) => (
+            {navigation.map((link) => (
               <button className={`nav-item ${activeSection === link.label ? 'nav-item--active' : ''}`} onClick={() => onNavigate(link.label)} key={link.label}>
                 <Icon name={link.icon} size={19} />
                 <span>{link.label}</span>
-                {link.badge && <span className="nav-item__badge">{link.badge}</span>}
               </button>
             ))}
           </div>

@@ -13,7 +13,6 @@ import { MyTasksPage } from './pages/MyTasksPage'
 import { OverviewPage } from './pages/OverviewPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { InvitationPage } from './pages/InvitationPage'
-import { currentUser } from './data/mockData'
 import { authApi, type LoginPayload, type RegisterPayload, type SsoProvider } from './services/authApi'
 import { getTaskAssignees, type Task, type TaskComment, type TaskPropertiesUpdate, type TaskStatus, type TimesheetEntry, type UserSummary } from './types/task'
 
@@ -28,7 +27,6 @@ function App() {
   const [sidebarHidden, setSidebarHidden] = useState(() => localStorage.getItem('taskflow-sidebar-hidden') === 'true')
   const [dark, setDark] = useState(false)
   const [activeSection, setActiveSection] = useState('Tổng quan')
-  const useMocks = import.meta.env.VITE_USE_MOCKS !== 'false'
   const invitationMatch = window.location.pathname.match(/^\/invitations\/([^/]+)$/)
   const invitationToken = invitationMatch ? decodeURIComponent(invitationMatch[1]) : null
 
@@ -57,11 +55,6 @@ function App() {
   }
 
   const authenticate = async (data: { mode: 'login' | 'register'; name?: string; email: string; phone?: string; password: string }) => {
-    if (useMocks) {
-      localStorage.setItem('taskflow-current-user', JSON.stringify({ ...currentUser, name: data.name || currentUser.name, email: data.email }))
-      finishAuthentication()
-      return
-    }
     const response = data.mode === 'login'
       ? await authApi.login({ email: data.email, password: data.password } satisfies LoginPayload)
       : await authApi.register({ name: data.name ?? '', email: data.email, phone: data.phone, password: data.password } satisfies RegisterPayload)
@@ -122,13 +115,11 @@ function App() {
     const refreshToken = localStorage.getItem('taskflow-refresh-token')
 
     try {
-      if (!useMocks) {
-        if (!refreshToken) {
-          throw new Error('Missing refresh token')
-        }
-
-        await authApi.logout(refreshToken)
+      if (!refreshToken) {
+        throw new Error('Missing refresh token')
       }
+
+      await authApi.logout(refreshToken)
     } catch {
       alert(
         'Chưa xác nhận được việc thu hồi phiên trên máy chủ. ' +
