@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { Avatar } from '../components/ui/Avatar'
 import { Icon } from '../components/ui/Icon'
 import { currentUser } from '../data/mockData'
+import { accountApi } from '../services/accountApi'
+
+const USE_MOCKS = import.meta.env.VITE_USE_MOCKS !== 'false'
 
 type ProfileTab = 'account' | 'security'
 
@@ -16,6 +19,7 @@ export function ProfilePage() {
   const [phone, setPhone] = useState(savedUser.phone ?? '0357 025 570')
   const [message, setMessage] = useState('')
   const [showPasswords, setShowPasswords] = useState(false)
+  const [savingPassword, setSavingPassword] = useState(false)
 
   const saveProfile = (event: React.FormEvent) => {
     event.preventDefault()
@@ -24,15 +28,32 @@ export function ProfilePage() {
     setMessage('Đã cập nhật thông tin tài khoản.')
   }
 
-  const changePassword = (event: React.FormEvent<HTMLFormElement>) => {
+  const changePassword = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const form = new FormData(event.currentTarget)
+    const formElement = event.currentTarget
+    const form = new FormData(formElement)
+    const currentPassword = String(form.get('currentPassword') ?? '')
     const password = String(form.get('newPassword') ?? '')
     if (password !== String(form.get('confirmPassword') ?? '')) {
       setMessage('Mật khẩu nhập lại chưa khớp.')
       return
     }
-    event.currentTarget.reset()
+    if (!USE_MOCKS) {
+      setSavingPassword(true)
+      try {
+        await accountApi.changePassword({
+          currentPassword: currentPassword || undefined,
+          newPassword: password,
+          refreshToken: localStorage.getItem('taskflow-refresh-token') ?? undefined,
+        })
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : 'Không thể đổi mật khẩu. Vui lòng thử lại.')
+        return
+      } finally {
+        setSavingPassword(false)
+      }
+    }
+    formElement.reset()
     setMessage('Đã đổi mật khẩu thành công.')
   }
 
@@ -53,11 +74,11 @@ export function ProfilePage() {
       </form>
     </section>}
     {tab === 'security' && <section className="profile-page-card security-card"><header><h2>Đổi mật khẩu</h2><p>Nhập mật khẩu hiện tại, sau đó đặt mật khẩu mới.</p></header><form onSubmit={changePassword}>
-      <label>Mật khẩu hiện tại<div><Icon name="lock" /><input required minLength={6} type={showPasswords ? 'text' : 'password'} placeholder="Nhập mật khẩu hiện tại" /></div></label>
-      <label>Mật khẩu mới<div><Icon name="lock" /><input name="newPassword" required minLength={6} type={showPasswords ? 'text' : 'password'} placeholder="Nhập mật khẩu mới" /></div></label>
-      <label>Nhập lại mật khẩu mới<div><Icon name="lock" /><input name="confirmPassword" required minLength={6} type={showPasswords ? 'text' : 'password'} placeholder="Nhập lại mật khẩu mới" /></div></label>
+      <label>Mật khẩu hiện tại<div><Icon name="lock" /><input name="currentPassword" type={showPasswords ? 'text' : 'password'} placeholder="Nhập mật khẩu hiện tại (bỏ trống nếu chưa có)" autoComplete="current-password" /></div></label>
+      <label>Mật khẩu mới<div><Icon name="lock" /><input name="newPassword" required minLength={8} type={showPasswords ? 'text' : 'password'} placeholder="Nhập mật khẩu mới (tối thiểu 8 ký tự)" autoComplete="new-password" /></div></label>
+      <label>Nhập lại mật khẩu mới<div><Icon name="lock" /><input name="confirmPassword" required minLength={8} type={showPasswords ? 'text' : 'password'} placeholder="Nhập lại mật khẩu mới" autoComplete="new-password" /></div></label>
       <label className="show-passwords"><input type="checkbox" checked={showPasswords} onChange={(event) => setShowPasswords(event.target.checked)} />Hiện mật khẩu</label>
-      <button className="primary-button" type="submit">Đổi mật khẩu</button>
+      <button className="primary-button" type="submit" disabled={savingPassword}>{savingPassword ? 'Đang lưu...' : 'Đổi mật khẩu'}</button>
     </form></section>}
   </main>
 }
