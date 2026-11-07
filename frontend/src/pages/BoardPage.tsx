@@ -22,7 +22,7 @@ interface BoardPageProps {
   onOpenTask: (task: Task) => void
   onMoveTask: (taskId: string, status: TaskStatus) => void
   onDeleteTask: (taskId: string) => void
-  onCreate: () => void
+  onCreate: (status?: TaskStatus) => void
   onMembersChange: (members: UserSummary[]) => void
 }
 
@@ -81,7 +81,7 @@ export function BoardPage({ board, columns, filter, onFilter, onOpenTask, onMove
         <div className="board-stats"><span><strong>{total}</strong> công việc</span><span><strong>{done}</strong> hoàn thành</span><div className="filter-menu"><button className={`filter-button ${filtersOpen ? 'active' : ''}`} onClick={() => setFiltersOpen((value) => !value)}><Icon name="filter" size={16} />Bộ lọc</button>{filtersOpen && <div className="filter-popover"><strong>Lọc công việc</strong>{filters.map((item) => <button className={filter === item.id ? 'active' : ''} onClick={() => { onFilter(item.id); setFiltersOpen(false) }} key={item.id}>{item.label}<span>{filter === item.id ? '✓' : ''}</span></button>)}</div>}</div></div>
       </section>}
 
-      {activeView === 'board' && <section className="board" aria-label="Bảng Kanban">{columns.map((column) => <BoardColumn column={column} onOpenTask={onOpenTask} onMoveTask={onMoveTask} onDeleteTask={onDeleteTask} onQuickAdd={() => onCreate()} key={column.id} />)}</section>}
+      {activeView === 'board' && <section className="board" aria-label="Bảng Kanban">{columns.map((column) => <BoardColumn column={column} onOpenTask={onOpenTask} onMoveTask={onMoveTask} onDeleteTask={onDeleteTask} onQuickAdd={(status) => onCreate(status)} key={column.id} />)}</section>}
       {activeView === 'list' && <TaskListView tasks={visibleTasks} onOpenTask={onOpenTask} />}
       {activeView === 'calendar' && <CalendarView tasks={visibleTasks} meetings={meetings} onOpenTask={onOpenTask} />}
       {activeView === 'progress' && <ProgressView columns={columns} tasks={visibleTasks} />}

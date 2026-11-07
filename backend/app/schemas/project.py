@@ -48,4 +48,6 @@ class ProjectSummary(BaseModel):
     description: str
     color: str
     progress: int = 0
+    totalTasks: int = 0
+    doneTasks: int = 0
     members: list[UserSummary] = []

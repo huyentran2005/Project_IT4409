@@ -35,6 +35,9 @@ export interface TaskComment {
 
 export interface Task {
   id: string
+  projectId?: string
+  projectName?: string
+  projectColor?: string
   key: string
   title: string
   description: string
@@ -64,6 +67,7 @@ export interface CreateTaskInput {
   description: string
   type: TaskType
   priority: TaskPriority
+  status?: TaskStatus
   startDate: string
   endDate: string
   assigneeIds: string[]
@@ -97,6 +101,8 @@ export interface ProjectSummary {
   description: string
   color: string
   progress: number
+  totalTasks?: number
+  doneTasks?: number
   members: UserSummary[]
 }
 
