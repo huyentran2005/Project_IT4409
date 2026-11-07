@@ -64,6 +64,7 @@ export interface CreateTaskInput {
   description: string
   type: TaskType
   priority: TaskPriority
+  status?: TaskStatus
   startDate: string
   endDate: string
   assigneeIds: string[]

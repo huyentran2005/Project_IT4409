@@ -2,6 +2,9 @@
 from sqlalchemy import bindparam, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from app.models.project import Project, Status
+from app.models.project_member import ProjectMember
+from app.models.task import Task
 from app.models.user import User
 from app.schemas.project import CreateProjectRequest, ProjectSummary
 from app.schemas.user import user_to_summary
@@ -20,15 +23,68 @@ DEFAULT_ROLES = [
 
 # code, tên cột, category, màu, WIP limit (khớp board mặc định của frontend)
 DEFAULT_STATUSES = [
-    ("backlog", "Cần làm", "todo", "#64748b", 8),
-    ("in-progress", "Đang làm", "in_progress", "#2563eb", 4),
-    ("review", "Đang duyệt", "in_progress", "#d97706", 3),
+    ("backlog", "Cần làm", "todo", "#64748b", None),
+    ("in-progress", "Đang làm", "in_progress", "#2563eb", None),
+    ("review", "Đang duyệt", "in_progress", "#d97706", None),
     ("done", "Hoàn thành", "done", "#0f9f8f", None),
 ]
 
 
 class ProjectKeyExists(Exception):
     pass
+
+
+def list_user_projects(db: Session, user: User) -> list[ProjectSummary]:
+    projects = (
+        db.query(Project)
+        .join(ProjectMember, ProjectMember.project_id == Project.id)
+        .filter(
+            ProjectMember.user_id == user.id,
+            Project.deleted_at.is_(None),
+        )
+        .order_by(Project.created_at.asc())
+        .all()
+    )
+    results: list[ProjectSummary] = []
+    for project in projects:
+        member_users = (
+            db.query(User)
+            .join(
+                ProjectMember,
+                (ProjectMember.user_id == User.id)
+                & (ProjectMember.project_id == project.id),
+            )
+            .filter(User.deleted_at.is_(None))
+            .order_by(ProjectMember.joined_at.asc())
+            .all()
+        )
+        tasks = (
+            db.query(Task.status_id)
+            .filter(Task.project_id == project.id, Task.deleted_at.is_(None))
+            .all()
+        )
+        done_status_ids = {
+            row[0]
+            for row in db.query(Status.id)
+            .filter(Status.project_id == project.id, Status.category == "done")
+            .all()
+        }
+        total_tasks = len(tasks)
+        done_count = sum(1 for (sid,) in tasks if sid in done_status_ids)
+        progress = round((done_count / total_tasks) * 100) if total_tasks > 0 else 0
+
+        results.append(
+            ProjectSummary(
+                id=str(project.id),
+                key=project.key.upper(),
+                name=project.name,
+                description=project.description,
+                color=project.color,
+                progress=progress,
+                members=[user_to_summary(u) for u in member_users],
+            )
+        )
+    return results
 
 
 def create_project(db: Session, owner: User, data: CreateProjectRequest) -> ProjectSummary:

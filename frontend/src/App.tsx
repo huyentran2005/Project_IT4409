@@ -22,6 +22,7 @@ function App() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [pendingTaskMove, setPendingTaskMove] = useState<{ taskId: string; status: TaskStatus } | null>(null)
   const [creating, setCreating] = useState(false)
+  const [creatingStatus, setCreatingStatus] = useState<TaskStatus>('backlog')
   const [creatingProject, setCreatingProject] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarHidden, setSidebarHidden] = useState(() => localStorage.getItem('taskflow-sidebar-hidden') === 'true')
@@ -224,16 +225,16 @@ function App() {
     <div className={`app${dark ? ' app--dark' : ''}${sidebarHidden ? ' app--sidebar-hidden' : ''}`}>
       <AppSidebar open={sidebarOpen} activeSection={activeSection} activeProjectId={board.project.id} projects={projects} onNavigate={(section) => { setActiveSection(section); setFilter(section === 'Công việc của tôi' ? 'mine' : 'all'); setSidebarOpen(false) }} onSelectProject={selectProject} onCreateProject={() => setCreatingProject(true)} onToggleHidden={() => setDesktopSidebarHidden(true)} onClose={() => setSidebarOpen(false)} />
       <div className="app__content">
-        <TopBar projectName={activeSection === 'Hồ sơ' ? 'Hồ sơ cá nhân' : board.project.name} query={query} onQueryChange={setQuery} onCreate={() => setCreating(true)} onMenu={() => { if (window.matchMedia('(max-width: 900px)').matches) setSidebarOpen(true); else setDesktopSidebarHidden(false) }} onToggleTheme={() => setDark((value) => !value)} onProfile={() => setActiveSection('Hồ sơ')} onLogout={logout} />
+        <TopBar projectName={activeSection === 'Hồ sơ' ? 'Hồ sơ cá nhân' : board.project.name} query={query} onQueryChange={setQuery} onCreate={() => { setCreatingStatus('backlog'); setCreating(true) }} onMenu={() => { if (window.matchMedia('(max-width: 900px)').matches) setSidebarOpen(true); else setDesktopSidebarHidden(false) }} onToggleTheme={() => setDark((value) => !value)} onProfile={() => setActiveSection('Hồ sơ')} onLogout={logout} />
         {loading && <div className="loading-state">Đang tải dữ liệu...</div>}
         {!loading && activeSection === 'Tổng quan' && <OverviewPage board={board} onOpenProject={() => setActiveSection('Dự án')} onOpenMyTasks={() => setActiveSection('Công việc của tôi')} onOpenTask={openTask} />}
         {!loading && activeSection === 'Công việc của tôi' && <MyTasksPage board={board} onOpenTask={openTask} />}
-        {!loading && activeSection === 'Dự án' && <BoardPage board={board} columns={columns} filter={filter} onFilter={setFilter} onOpenTask={openTask} onMoveTask={moveBoardTask} onDeleteTask={deleteTask} onCreate={() => setCreating(true)} onMembersChange={updateProjectMembers} />}
+        {!loading && activeSection === 'Dự án' && <BoardPage board={board} columns={columns} filter={filter} onFilter={setFilter} onOpenTask={openTask} onMoveTask={moveBoardTask} onDeleteTask={deleteTask} onCreate={(status = 'backlog') => { setCreatingStatus(status); setCreating(true) }} onMembersChange={updateProjectMembers} />}
         {!loading && activeSection === 'Hồ sơ' && <ProfilePage />}
       </div>
       {selectedTask && <TaskDrawer key={selectedTask.id} task={selectedTask} members={board.project.members} reviewRequested={pendingTaskMove?.taskId === selectedTask.id && pendingTaskMove.status === 'review' && !selectedTask.reviewer} overdueReasonRequired={pendingTaskMove?.taskId === selectedTask.id && isTaskOverdue(selectedTask) && !selectedTask.overdueReason?.trim()} onClose={() => { setSelectedTask(null); setPendingTaskMove(null) }} onMove={moveSelectedTask} onReviewerChange={changeReviewer} onUpdateProperties={changeProperties} onDelete={deleteSelectedTask} onLogTime={logSelectedTime} onAddComment={commentOnSelectedTask} />}
-      {creating && <CreateTaskModal projectName={board.project.name} members={board.project.members} onClose={() => setCreating(false)} onCreate={addTask} />}
-      {creatingProject && <CreateProjectModal onClose={() => setCreatingProject(false)} onCreate={createProject} />}
+      {creating && <CreateTaskModal projectName={board.project.name} members={board.project.members} initialStatus={creatingStatus} onClose={() => setCreating(false)} onCreate={addTask} />}
+      {creatingProject && <CreateProjectModal onClose={() => setCreatingProject(false)} onCreate={async (input) => { await createProject(input); setActiveSection('Dự án') }} />}
     </div>
   )
 }

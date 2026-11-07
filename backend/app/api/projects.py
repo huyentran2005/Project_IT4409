@@ -4,9 +4,24 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.project import CreateProjectRequest, ProjectSummary
-from app.services.project_service import ProjectKeyExists, create_project
+from app.services.project_service import (
+    ProjectKeyExists,
+    create_project,
+    list_user_projects,
+)
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+
+
+@router.get("", response_model=list[ProjectSummary])
+def list_projects_endpoint(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Lấy danh sách tất cả các dự án (chưa xóa) mà người dùng hiện tại là thành viên.
+    """
+    return list_user_projects(db, current_user)
 
 
 @router.post("", response_model=ProjectSummary, status_code=status.HTTP_201_CREATED)

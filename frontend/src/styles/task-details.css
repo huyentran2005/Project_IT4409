@@ -9,6 +9,7 @@
 .task-assignee-stack .avatar { margin-left: -6px; }
 .task-assignee-stack>i { min-width: 26px; height: 26px; margin-left: -6px; border: 2px solid var(--surface); border-radius: 50%; background: var(--surface-muted); color: var(--muted); display: grid; place-items: center; font-size: 10px; font-style: normal; font-weight: 700; }
 .task-description-field { margin-top: 17px; display: block; }
+.create-modal__fields--three { grid-template-columns: repeat(3, 1fr); }
 .create-modal textarea { width: 100%; min-height: 82px; margin-top: 7px; padding: 10px 12px; resize: vertical; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-subtle); color: var(--text); font: inherit; line-height: 1.45; }
 .modal-layer { padding: 16px; overflow-y: auto; display: flex; align-items: flex-start; justify-content: center; }
 .modal-layer .create-modal { margin-block: auto; }

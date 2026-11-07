@@ -47,15 +47,20 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
   useEffect(() => {
     if (!authenticated || !localStorage.getItem('taskflow-token')) return
     Promise.allSettled([
+      projectApi.listProjects(),
       taskApi.getBoard(projectId),
       projectApi.getMembers(projectId),
     ])
-      .then(([boardResult, membersResult]) => {
+      .then(([projectsResult, boardResult, membersResult]) => {
+        const fetchedProjects = projectsResult.status === 'fulfilled'
+          ? projectsResult.value
+          : []
         if (boardResult.status !== 'fulfilled') {
           setBoard({
             ...emptyBoard,
             project: { ...emptyBoard.project, id: '', name: 'Chưa có dự án' },
           })
+          setProjects(fetchedProjects)
           return
         }
         const nextBoard = boardResult.value
@@ -73,10 +78,14 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
 
         boardCache.current[loadedBoard.project.id] = loadedBoard
         setBoard(loadedBoard)
-        setProjects((current) => {
-          const withoutCurrent = current.filter((item) => item.id !== loadedBoard.project.id)
-          return [loadedBoard.project, ...withoutCurrent]
-        })
+        if (fetchedProjects.length > 0) {
+          setProjects(fetchedProjects.map((item) => item.id === loadedBoard.project.id ? loadedBoard.project : item))
+        } else {
+          setProjects((current) => {
+            const withoutCurrent = current.filter((item) => item.id !== loadedBoard.project.id)
+            return [loadedBoard.project, ...withoutCurrent]
+          })
+        }
       })
       .finally(() => setLoading(false))
   }, [projectId, authenticated])
@@ -136,20 +145,22 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
     const newBoard: BoardData = {
       project,
       columns: [
-        { id: 'backlog', title: 'Cần làm', accent: '#64748b', limit: 8, tasks: [] },
-        { id: 'in-progress', title: 'Đang làm', accent: '#2563eb', limit: 4, tasks: [] },
-        { id: 'review', title: 'Đang duyệt', accent: '#d97706', limit: 3, tasks: [] },
+        { id: 'backlog', title: 'Cần làm', accent: '#64748b', tasks: [] },
+        { id: 'in-progress', title: 'Đang làm', accent: '#2563eb', tasks: [] },
+        { id: 'review', title: 'Đang duyệt', accent: '#d97706', tasks: [] },
         { id: 'done', title: 'Hoàn thành', accent: '#0f9f8f', tasks: [] },
       ],
     }
-    boardCache.current[board.project.id] = board
+    if (board.project.id) {
+      boardCache.current[board.project.id] = board
+    }
     boardCache.current[project.id] = newBoard
-    setProjects((current) => [...current, project])
+    setProjects((current) => [...current.filter((item) => item.id !== project.id), project])
     setBoard(newBoard)
   }
 
   const addTask = async (input: CreateTaskInput) => {
-    const created = await taskApi.createTask(board.project.id, { ...input, status: 'backlog' })
+    const created = await taskApi.createTask(board.project.id, { ...input, status: input.status ?? 'backlog' })
     setBoard((current) => ({
       ...current,
       columns: current.columns.map((column) => column.id === created.status ? { ...column, tasks: [created, ...column.tasks] } : column),
