@@ -392,44 +392,26 @@ class TaskApiTestCase(unittest.TestCase):
         )
         self.assertEqual(res_del_again.status_code, 404)
 
-    def test_get_board_and_auto_bootstrap_for_new_user(self):
+    def test_get_board_with_default_alias(self):
         outsider = self.seeded["outsider"]
-        # Outsider chưa có dự án nào, khi FE gọi /api/projects/p-01/board sẽ tự khởi tạo dự án mặc định
-        board_res = self.client.get(
+        owner = self.seeded["owner"]
+
+        # Outsider chưa có dự án nào -> trả về 404 thay vì tự tạo dự án
+        res_outsider = self.client.get(
             "/api/projects/p-01/board",
             headers=_auth_headers(outsider),
+        )
+        self.assertEqual(res_outsider.status_code, 404)
+
+        # Owner đã có dự án -> trả về dự án đầu tiên của owner
+        board_res = self.client.get(
+            "/api/projects/p-01/board",
+            headers=_auth_headers(owner),
         )
         self.assertEqual(board_res.status_code, 200, board_res.text)
         board = board_res.json()
         self.assertEqual(len(board["columns"]), 4)
-        project_id = board["project"]["id"]
-
-        today = date.today()
-        create_res = self.client.post(
-            f"/api/projects/{project_id}/tasks",
-            json={
-                "title": "Task tạo trực tiếp từ giao diện FE",
-                "description": "Hiển thị trên cột Cần làm",
-                "type": "task",
-                "priority": "high",
-                "startDate": today.isoformat(),
-                "endDate": today.isoformat(),
-                "assigneeIds": [str(outsider.id)],
-                "status": "backlog",
-            },
-            headers=_auth_headers(outsider),
-        )
-        self.assertEqual(create_res.status_code, 201, create_res.text)
-
-        board_after = self.client.get(
-            f"/api/projects/{project_id}/board",
-            headers=_auth_headers(outsider),
-        ).json()
-        backlog_col = next(c for c in board_after["columns"] if c["id"] == "backlog")
-        self.assertEqual(len(backlog_col["tasks"]), 1)
-        self.assertEqual(
-            backlog_col["tasks"][0]["title"], "Task tạo trực tiếp từ giao diện FE"
-        )
+        self.assertEqual(board["project"]["id"], str(self.seeded["project"].id))
 
 
 if __name__ == "__main__":

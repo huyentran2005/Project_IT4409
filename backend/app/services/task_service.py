@@ -27,166 +27,29 @@ class TaskServiceError(Exception):
         self.message = message
 
 
-_DEFAULT_PERMISSIONS = [
-    ("project.manage", "Quản lý dự án", "Sửa thông tin và cấu hình dự án"),
-    ("member.manage", "Quản lý thành viên", "Mời, đổi vai trò và xóa thành viên"),
-    ("task.manage", "Quản lý công việc", "Tạo, sửa và di chuyển công việc"),
-    ("document.manage", "Quản lý tài liệu", "Tải lên, cập nhật và xóa tài liệu"),
-    ("project.view", "Xem dự án", "Xem bảng, thành viên và tài liệu"),
-]
-
-_DEFAULT_STATUSES = [
-    ("backlog", "Cần làm", "todo", "#64748b", Decimal("1000"), None),
-    ("in-progress", "Đang làm", "in_progress", "#2563eb", Decimal("2000"), None),
-    ("review", "Đang duyệt", "in_progress", "#d97706", Decimal("3000"), None),
-    ("done", "Hoàn thành", "done", "#0f9f8f", Decimal("4000"), None),
-]
-
-
-def ensure_default_project_for_user(db: Session, user: User) -> Project:
-    """
-    Tìm dự án đầu tiên mà user là thành viên. Nếu user chưa có dự án nào
-    (ví dụ: vừa đăng ký hoặc chưa chạy API tạo dự án), tự động khởi tạo
-    dự án mặc định đủ Role, Permission và 4 cột Status chuẩn để thao tác ngay trên FE.
-    """
-    existing = (
-        db.query(Project)
-        .join(ProjectMember, ProjectMember.project_id == Project.id)
-        .filter(
-            ProjectMember.user_id == user.id,
-            Project.deleted_at.is_(None),
-        )
-        .order_by(Project.created_at.asc())
-        .first()
-    )
-    if existing:
-        return existing
-
-    # Tìm key chưa trùng (TF, TF1, TF2...)
-    base_key = "TF"
-    candidate_key = base_key
-    suffix = 1
-    while (
-        db.query(Project)
-        .filter(
-            func.upper(Project.key) == candidate_key,
-            Project.deleted_at.is_(None),
-        )
-        .first()
-        is not None
-    ):
-        candidate_key = f"{base_key}{suffix}"
-        suffix += 1
-
-    project = Project(
-        owner_id=user.id,
-        name="TaskFlow Web App",
-        key=candidate_key,
-        description="Nền tảng quản lý công việc cho đội ngũ sản phẩm",
-        color="#5B5CE2",
-        task_sequence=0,
-    )
-    db.add(project)
-    db.flush()
-
-    # Đảm bảo danh mục permissions có đủ 5 mã chuẩn
-    perms_by_code: dict[str, Permission] = {}
-    for code, name, desc in _DEFAULT_PERMISSIONS:
-        perm = db.query(Permission).filter(Permission.code == code).first()
-        if not perm:
-            perm = Permission(code=code, name=name, description=desc)
-            db.add(perm)
-            db.flush()
-        perms_by_code[code] = perm
-
-    role_configs = [
-        (
-            "owner",
-            "Owner",
-            1,
-            [
-                "project.manage",
-                "member.manage",
-                "task.manage",
-                "document.manage",
-                "project.view",
-            ],
-        ),
-        (
-            "manager",
-            "Manager",
-            2,
-            ["member.manage", "task.manage", "document.manage", "project.view"],
-        ),
-        (
-            "member",
-            "Member",
-            3,
-            ["task.manage", "document.manage", "project.view"],
-        ),
-        ("viewer", "Viewer", 4, ["project.view"]),
-    ]
-
-    owner_role: ProjectRole | None = None
-    for r_code, r_name, r_pos, perm_codes in role_configs:
-        role = ProjectRole(
-            project_id=project.id,
-            code=r_code,
-            name=r_name,
-            is_system=True,
-            position=r_pos,
-        )
-        db.add(role)
-        db.flush()
-        if r_code == "owner":
-            owner_role = role
-        for p_code in perm_codes:
-            db.add(
-                ProjectRolePermission(
-                    role_id=role.id,
-                    permission_id=perms_by_code[p_code].id,
-                )
-            )
-
-    assert owner_role is not None
-    db.add(
-        ProjectMember(
-            project_id=project.id,
-            user_id=user.id,
-            role_id=owner_role.id,
-        )
-    )
-
-    for s_code, s_name, s_cat, s_color, s_pos, s_limit in _DEFAULT_STATUSES:
-        db.add(
-            Status(
-                project_id=project.id,
-                code=s_code,
-                name=s_name,
-                category=s_cat,
-                color=s_color,
-                position=s_pos,
-                wip_limit=s_limit,
-            )
-        )
-
-    db.commit()
-    db.refresh(project)
-    return project
-
-
 def resolve_project_id(
     db: Session, project_id_or_alias: str, user: User
 ) -> uuid.UUID:
     """
     Chuyển chuỗi project_id trên URL thành UUID thực tế.
-    Hỗ trợ cả UUID thật lẫn mã giả định 'p-01' trên Frontend khi chưa chọn dự án.
+    Nếu truyền mã mặc định (như 'p-01'), trả về dự án đầu tiên mà user là thành viên.
     """
     try:
         return uuid.UUID(project_id_or_alias)
     except (ValueError, TypeError):
-        project = ensure_default_project_for_user(db, user)
-        return project.id
+        existing = (
+            db.query(Project)
+            .join(ProjectMember, ProjectMember.project_id == Project.id)
+            .filter(
+                ProjectMember.user_id == user.id,
+                Project.deleted_at.is_(None),
+            )
+            .order_by(Project.created_at.asc())
+            .first()
+        )
+        if not existing:
+            raise TaskServiceError("not_found", "Không tìm thấy dự án.")
+        return existing.id
 
 
 def check_task_manage_permission(

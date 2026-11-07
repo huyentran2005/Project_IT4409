@@ -51,9 +51,14 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
       projectApi.getMembers(projectId),
     ])
       .then(([boardResult, membersResult]) => {
-        const nextBoard = boardResult.status === 'fulfilled'
-          ? boardResult.value
-          : emptyBoard
+        if (boardResult.status !== 'fulfilled') {
+          setBoard({
+            ...emptyBoard,
+            project: { ...emptyBoard.project, id: '', name: 'Chưa có dự án' },
+          })
+          return
+        }
+        const nextBoard = boardResult.value
         const members = membersResult.status === 'fulfilled'
           ? membersResult.value.map(memberToUserSummary)
           : nextBoard.project.members
