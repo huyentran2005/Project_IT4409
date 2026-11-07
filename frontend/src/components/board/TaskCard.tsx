@@ -20,7 +20,7 @@ export function TaskCard({ task, onOpen, onDelete }: TaskCardProps) {
   const overdue = task.status !== 'done' && new Date(`${task.endDate}T23:59:59`) < new Date()
   const deleteTask = () => {
     setMenuOpen(false)
-    if (window.confirm(`Xóa công việc “${task.title}”? Hành động này không thể hoàn tác.`)) onDelete(task.id)
+    onDelete(task.id)
   }
   return (
     <article className="task-card" draggable onDragStart={(event) => event.dataTransfer.setData('text/task-id', task.id)} onClick={() => onOpen(task)}>

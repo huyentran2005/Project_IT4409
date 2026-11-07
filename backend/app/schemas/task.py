@@ -83,8 +83,78 @@ class CreateTaskRequest(BaseModel):
         return self
 
 
+class MoveTaskRequest(BaseModel):
+    status: str = Field(min_length=1, max_length=40)
+    position: float | None = None
+    reviewerId: uuid.UUID | None = None
+    description: str | None = None
+    priority: TaskPriorityLiteral | None = None
+    assigneeIds: list[uuid.UUID] | None = None
+    startDate: date | None = None
+    endDate: date | None = None
+    overdueReason: str | None = None
+    acceptanceResult: str | None = None
+
+    @field_validator("assigneeIds")
+    @classmethod
+    def _dedupe_assignees(
+        cls, v: list[uuid.UUID] | None
+    ) -> list[uuid.UUID] | None:
+        if v is None:
+            return None
+        seen: set[uuid.UUID] = set()
+        unique: list[uuid.UUID] = []
+        for item in v:
+            if item not in seen:
+                seen.add(item)
+                unique.append(item)
+        return unique
+
+
+class SetReviewerRequest(BaseModel):
+    reviewerId: uuid.UUID
+
+
+class UpdateTaskPropertiesRequest(BaseModel):
+    description: str = Field(min_length=1)
+    priority: TaskPriorityLiteral
+    assigneeIds: list[uuid.UUID] = Field(default_factory=list)
+    startDate: date
+    endDate: date
+    overdueReason: str = ""
+    acceptanceResult: str = ""
+
+    @field_validator("description")
+    @classmethod
+    def _clean_description(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Mô tả công việc không được để trống")
+        return v
+
+    @field_validator("assigneeIds")
+    @classmethod
+    def _dedupe_assignees(cls, v: list[uuid.UUID]) -> list[uuid.UUID]:
+        seen: set[uuid.UUID] = set()
+        unique: list[uuid.UUID] = []
+        for item in v:
+            if item not in seen:
+                seen.add(item)
+                unique.append(item)
+        return unique
+
+    @model_validator(mode="after")
+    def _validate_dates(self) -> "UpdateTaskPropertiesRequest":
+        if self.endDate < self.startDate:
+            raise ValueError("Ngày kết thúc không được trước ngày bắt đầu")
+        return self
+
+
 class TaskResponse(BaseModel):
     id: str
+    projectId: str | None = None
+    projectName: str | None = None
+    projectColor: str | None = None
     key: str
     title: str
     description: str
@@ -121,6 +191,8 @@ class ProjectSummaryResponse(BaseModel):
     description: str
     color: str
     progress: int = 0
+    totalTasks: int = 0
+    doneTasks: int = 0
     members: list[UserSummary] = Field(default_factory=list)
 
 
@@ -148,6 +220,9 @@ def task_to_response(
 
     return TaskResponse(
         id=str(task.id),
+        projectId=str(task.project_id),
+        projectName=task.project.name if task.project else None,
+        projectColor=task.project.color if task.project else None,
         key=f"{resolved_project_key}-{task.number}",
         title=task.title,
         description=task.description,

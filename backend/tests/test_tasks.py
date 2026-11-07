@@ -413,6 +413,100 @@ class TaskApiTestCase(unittest.TestCase):
         self.assertEqual(len(board["columns"]), 4)
         self.assertEqual(board["project"]["id"], str(self.seeded["project"].id))
 
+    def test_move_task_reviewer_and_properties(self):
+        project = self.seeded["project"]
+        owner = self.seeded["owner"]
+        member = self.seeded["member"]
+        viewer = self.seeded["viewer"]
+        today = date.today()
+
+        create_res = self.client.post(
+            f"/api/projects/{project.id}/tasks",
+            json={
+                "title": "Task kiểm tra kéo thả",
+                "description": "Mô tả ban đầu",
+                "type": "task",
+                "priority": "medium",
+                "startDate": today.isoformat(),
+                "endDate": (today + timedelta(days=3)).isoformat(),
+                "assigneeIds": [str(member.id)],
+                "status": "backlog",
+            },
+            headers=_auth_headers(member),
+        )
+        self.assertEqual(create_res.status_code, 201)
+        task_id = create_res.json()["id"]
+
+        # Viewer không được phép kéo thả
+        res_viewer = self.client.patch(
+            f"/api/tasks/{task_id}/move",
+            json={"status": "in-progress", "position": 0},
+            headers=_auth_headers(viewer),
+        )
+        self.assertEqual(res_viewer.status_code, 403)
+
+        # Kéo thả sang in-progress
+        res_in_progress = self.client.patch(
+            f"/api/tasks/{task_id}/move",
+            json={"status": "in-progress", "position": 0},
+            headers=_auth_headers(member),
+        )
+        self.assertEqual(res_in_progress.status_code, 200)
+        self.assertEqual(res_in_progress.json()["status"], "in-progress")
+
+        # Chuyển sang review nhưng chưa có reviewer -> 400
+        res_review_no_reviewer = self.client.patch(
+            f"/api/tasks/{task_id}/move",
+            json={"status": "review", "position": 0},
+            headers=_auth_headers(member),
+        )
+        self.assertEqual(res_review_no_reviewer.status_code, 400)
+
+        # Chuyển sang review kèm reviewerId -> 200
+        res_review = self.client.patch(
+            f"/api/tasks/{task_id}/move",
+            json={
+                "status": "review",
+                "position": 0,
+                "reviewerId": str(owner.id),
+            },
+            headers=_auth_headers(member),
+        )
+        self.assertEqual(res_review.status_code, 200)
+        self.assertEqual(res_review.json()["status"], "review")
+        self.assertEqual(res_review.json()["reviewer"]["id"], str(owner.id))
+
+        # Chuyển sang done -> completedAt được gán
+        res_done = self.client.patch(
+            f"/api/tasks/{task_id}/move",
+            json={"status": "done", "position": 0},
+            headers=_auth_headers(member),
+        )
+        self.assertEqual(res_done.status_code, 200)
+        self.assertEqual(res_done.json()["status"], "done")
+        self.assertIsNotNone(res_done.json()["completedAt"])
+
+        # Cập nhật thuộc tính trong TaskDrawer
+        res_props = self.client.patch(
+            f"/api/tasks/{task_id}/properties",
+            json={
+                "description": "Mô tả đã cập nhật",
+                "priority": "high",
+                "assigneeIds": [str(member.id), str(owner.id)],
+                "startDate": today.isoformat(),
+                "endDate": (today + timedelta(days=5)).isoformat(),
+                "overdueReason": "",
+                "acceptanceResult": "Đã nghiệm thu đạt yêu cầu",
+            },
+            headers=_auth_headers(member),
+        )
+        self.assertEqual(res_props.status_code, 200)
+        self.assertEqual(res_props.json()["description"], "Mô tả đã cập nhật")
+        self.assertEqual(res_props.json()["priority"], "high")
+        self.assertEqual(
+            res_props.json()["acceptanceResult"], "Đã nghiệm thu đạt yêu cầu"
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

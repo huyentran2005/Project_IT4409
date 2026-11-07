@@ -35,6 +35,16 @@ class ProjectKeyExists(Exception):
 
 
 def list_user_projects(db: Session, user: User) -> list[ProjectSummary]:
+    """
+    Lấy danh sách tất cả các dự án chưa xóa mà người dùng là thành viên.
+
+    Input (Đầu vào):
+        - db (Session): Phiên kết nối cơ sở dữ liệu.
+        - user (User): Người dùng hiện tại.
+
+    Output (Đầu ra):
+        - list[ProjectSummary]: Danh sách thông tin tóm tắt của các dự án (kèm tiến độ % và thành viên).
+    """
     projects = (
         db.query(Project)
         .join(ProjectMember, ProjectMember.project_id == Project.id)
@@ -81,6 +91,8 @@ def list_user_projects(db: Session, user: User) -> list[ProjectSummary]:
                 description=project.description,
                 color=project.color,
                 progress=progress,
+                totalTasks=total_tasks,
+                doneTasks=done_count,
                 members=[user_to_summary(u) for u in member_users],
             )
         )

@@ -20,6 +20,13 @@ def list_projects_endpoint(
 ):
     """
     Lấy danh sách tất cả các dự án (chưa xóa) mà người dùng hiện tại là thành viên.
+
+    Input (Đầu vào):
+        - Authorization Header: Bearer <access_token>.
+
+    Output (Đầu ra):
+        - 200 OK: Danh sách list[ProjectSummary] (gồm id, key, name, description, color, progress, members).
+        - 401 Unauthorized: Chưa đăng nhập hoặc token hết hạn.
     """
     return list_user_projects(db, current_user)
 
