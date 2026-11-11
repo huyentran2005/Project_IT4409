@@ -1,0 +1,73 @@
+/* Timesheet: trang nhật ký, form Log giờ, huy hiệu OT */
+.ot-badge { margin-left: 6px; padding: 1px 6px; border-radius: 5px; background: #fff4e0; color: #b45309; font-size: 10px; font-style: normal; font-weight: 700; }
+.entry-delete { color: var(--muted); }
+.entry-delete:hover { color: #e34b58; }
+.timesheet-entry:has(.entry-delete) { grid-template-columns: 30px 1fr auto 30px; }
+.comment-list article:has(.entry-delete) { grid-template-columns: 34px 1fr 30px; }
+.time-log-form .time-overtime { grid-column: span 2; display: flex; align-items: center; gap: 8px; }
+.time-log-form .time-overtime input { width: auto; height: auto; margin: 0; }
+
+.timesheet-tabs { display: flex; gap: 22px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+.timesheet-tabs button { padding: 10px 2px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); font-weight: 600; cursor: pointer; }
+.timesheet-tabs button.active { border-color: #2f6fa7; color: #2f6fa7; }
+.timesheet-filters { margin-bottom: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.timesheet-range { display: flex; padding: 3px; border-radius: 10px; background: var(--surface-subtle); }
+.timesheet-range button { padding: 7px 12px; border: 0; border-radius: 8px; background: none; color: var(--muted); font-weight: 600; cursor: pointer; }
+.timesheet-range button.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgb(0 0 0 / 12%); }
+.timesheet-date input { height: 38px; padding: 0 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--text); }
+.timesheet-date span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.timesheet-ot-toggle { height: 38px; padding: 0 12px; display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--text); cursor: pointer; }
+.timesheet-ot-toggle b { padding: 1px 5px; border: 1px solid #f0b45a; border-radius: 4px; color: #b45309; font-size: 10px; }
+.timesheet-ot-toggle.active { border-color: #f0b45a; background: #fff8ec; }
+.timesheet-total { margin-left: auto; color: var(--muted); }
+.timesheet-total strong { color: var(--text); }
+.timesheet-empty { padding: 56px 20px; border: 1px dashed var(--border); border-radius: 16px; color: var(--muted); text-align: center; }
+.timesheet-day { margin-bottom: 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); overflow: hidden; }
+.timesheet-day > header { padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; background: var(--surface-subtle); }
+.timesheet-day h2 { margin: 0; font-size: 14px; text-transform: capitalize; }
+.timesheet-day > header span { font-weight: 700; }
+.timesheet-day > header .over-limit { color: #e34b58; }
+.timesheet-row { padding: 12px 16px; display: grid; grid-template-columns: 70px 1fr auto auto 56px 30px; gap: 12px; align-items: center; }
+.timesheet-row + .timesheet-row { border-top: 1px solid var(--border); }
+.timesheet-row__key { color: #2f6fa7; font-weight: 700; font-size: 12px; }
+.timesheet-row strong, .timesheet-row small { display: block; }
+.timesheet-row small { margin-top: 2px; color: var(--muted); }
+.timesheet-row time { color: var(--muted); font-size: 12px; }
+.timesheet-row b { text-align: right; }
+.timesheet-chart-panel { padding: 20px; }
+.timesheet-chart-panel header { margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+.timesheet-chart-panel h2 { margin: 0; font-size: 16px; }
+.legend { display: inline-block; width: 10px; height: 10px; margin: 0 4px 0 12px; border-radius: 3px; }
+.legend--normal { background: #3177b5; }
+.legend--ot { background: #f0a030; }
+.timesheet-bars { height: 220px; display: flex; align-items: flex-end; gap: 8px; overflow-x: auto; }
+.timesheet-bar { min-width: 28px; height: 100%; flex: 1; display: flex; flex-direction: column; align-items: center; }
+.timesheet-bar > div { width: 100%; flex: 1; display: flex; flex-direction: column; justify-content: flex-end; }
+.timesheet-bar__normal { background: #3177b5; border-radius: 0 0 4px 4px; min-height: 0; }
+.timesheet-bar__ot { background: #f0a030; border-radius: 4px 4px 0 0; }
+.timesheet-bar small { margin-top: 6px; color: var(--muted); font-size: 10px; }
+
+.timelog-drawer { position: fixed; z-index: 60; top: 0; right: 0; bottom: 0; width: min(560px, 100vw); display: flex; flex-direction: column; background: var(--surface); box-shadow: -12px 0 40px rgb(0 0 0 / 14%); animation: view-in .2s ease-out; }
+.timelog-drawer__header { padding: 18px 22px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
+.timelog-drawer__header h2 { margin: 0; font-size: 18px; }
+.timelog-form { padding: 22px; flex: 1; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+.timelog-form label { color: var(--muted); font-size: 13px; }
+.timelog-form label b { color: #e34b58; }
+.timelog-form select, .timelog-form input[type='date'], .timelog-form input[type='number'], .timelog-form textarea { width: 100%; margin-top: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); font: inherit; }
+.timelog-form textarea { min-height: 90px; resize: vertical; }
+.timelog-form__row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.timelog-ot { padding: 14px; display: flex; gap: 12px; border: 1px solid var(--border); border-radius: 12px; }
+.timelog-ot span { display: block; }
+.timelog-ot strong { display: block; color: var(--text); }
+.timelog-ot small { color: var(--muted); }
+.timelog-hint { margin: 0; color: var(--muted); font-size: 13px; }
+.timelog-form__actions { margin-top: auto; padding-top: 14px; display: flex; justify-content: flex-end; align-items: center; gap: 12px; border-top: 1px solid var(--border); }
+.text-button { border: 0; background: none; color: var(--text); font-weight: 600; cursor: pointer; }
+
+.dashboard-heading__actions { display: flex; gap: 10px; }
+.dashboard-timelog { margin-bottom: 18px; padding: 18px 22px; display: flex; flex-wrap: wrap; align-items: center; gap: 28px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
+.dashboard-timelog > div span { display: block; color: var(--muted); font-size: 13px; }
+.dashboard-timelog > div strong { font-size: 26px; }
+.dashboard-timelog small { display: block; color: var(--muted); }
+.dashboard-timelog .warn { color: #d97706; font-weight: 600; }
+@media (max-width: 650px) { .timesheet-row { grid-template-columns: 56px 1fr auto 28px; } .timesheet-row time, .timesheet-row .ot-badge { display: none; } .timesheet-total { margin-left: 0; } .timelog-form__row { grid-template-columns: 1fr; } }

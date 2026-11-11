@@ -4,14 +4,24 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.task import BoardDataResponse, CreateTaskRequest, TaskResponse
+from app.schemas.task import (
+    BoardDataResponse,
+    CreateTaskRequest,
+    MoveTaskRequest,
+    ReviewerRequest,
+    TaskPropertiesRequest,
+    TaskResponse,
+)
 from app.services.task_service import (
     TaskServiceError,
     create_task,
     delete_task,
     get_project_board,
     list_project_tasks,
+    move_task,
     resolve_project_id,
+    set_task_reviewer,
+    update_task_properties,
 )
 
 router = APIRouter(tags=["tasks"])
@@ -149,3 +159,58 @@ def remove_task(
     except TaskServiceError as exc:
         _raise_http_error(exc)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.patch("/tasks/{task_id}/move", response_model=TaskResponse)
+def move_project_task(
+    task_id: uuid.UUID,
+    payload: MoveTaskRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Đổi trạng thái công việc (kéo-thả sang cột khác). Cần quyền `task.manage`.
+
+    400: trạng thái không tồn tại / thiếu người duyệt khi vào 'review' / thiếu lý do quá hạn khi hoàn thành.
+    """
+    client_ip = request.client.host if request.client else None
+    try:
+        return move_task(db, task_id=task_id, current_user=current_user, payload=payload, client_ip=client_ip)
+    except TaskServiceError as exc:
+        _raise_http_error(exc)
+
+
+@router.patch("/tasks/{task_id}/reviewer", response_model=TaskResponse)
+def set_project_task_reviewer(
+    task_id: uuid.UUID,
+    payload: ReviewerRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Gán người duyệt công việc. Cần quyền `task.manage`."""
+    client_ip = request.client.host if request.client else None
+    try:
+        return set_task_reviewer(
+            db, task_id=task_id, current_user=current_user, reviewer_id=payload.reviewerId, client_ip=client_ip
+        )
+    except TaskServiceError as exc:
+        _raise_http_error(exc)
+
+
+@router.patch("/tasks/{task_id}/properties", response_model=TaskResponse)
+def update_project_task_properties(
+    task_id: uuid.UUID,
+    payload: TaskPropertiesRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Sửa mô tả, ưu tiên, người thực hiện, ngày bắt đầu/kết thúc, lý do quá hạn, kết quả nghiệm thu."""
+    client_ip = request.client.host if request.client else None
+    try:
+        return update_task_properties(
+            db, task_id=task_id, current_user=current_user, payload=payload, client_ip=client_ip
+        )
+    except TaskServiceError as exc:
+        _raise_http_error(exc)

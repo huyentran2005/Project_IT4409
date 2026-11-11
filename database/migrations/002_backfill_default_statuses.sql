@@ -19,7 +19,7 @@ SELECT
 FROM projects AS p
 CROSS JOIN (
     VALUES
-        ('backlog',     'Cần làm',     'todo',        '#64748b', 1000::numeric, NULL),
+        ('backlog',     'Cần làm',     'todo',        '#64748b', 1000::numeric, NULL::integer),
         ('in-progress', 'Đang làm',    'in_progress', '#2563eb', 2000::numeric, NULL),
         ('review',      'Đang duyệt',  'in_progress', '#d97706', 3000::numeric, NULL),
         ('done',        'Hoàn thành',   'done',        '#0f9f8f', 4000::numeric, NULL)

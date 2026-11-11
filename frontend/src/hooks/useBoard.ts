@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { projectApi } from '../services/projectApi'
 import { taskApi } from '../services/taskApi'
 import type { ProjectMember } from '../types/project'
-import { getTaskAssignees, type BoardData, type BoardFilter, type CreateProjectInput, type CreateTaskInput, type ProjectSummary, type Task, type TaskComment, type TaskPropertiesUpdate, type TaskStatus, type TimesheetEntry, type UserSummary } from '../types/task'
+import { getTaskAssignees, type BoardData, type BoardFilter, type CreateProjectInput, type CreateTaskInput, type ProjectSummary, type Task, type TaskComment, type TaskPropertiesUpdate, type TaskStatus, type TimesheetEntry, type TimesheetInput, type UserSummary } from '../types/task'
 import { getStoredUser } from '../utils/session'
 
 const emptyBoard: BoardData = {
@@ -76,6 +76,28 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
       .finally(() => setLoading(false))
   }, [projectId, authenticated])
 
+  /** Tải lại bảng từ server (giữ danh sách thành viên) để đồng bộ tiến độ %, completedAt... */
+  const refresh = useCallback(async () => {
+    try {
+      const latest = await taskApi.getBoard(board.project.id)
+      setBoard((current) => ({
+        ...current,
+        project: { ...current.project, progress: latest.project.progress },
+        columns: latest.columns.length > 0 ? latest.columns : current.columns,
+      }))
+    } catch {
+      // Giữ nguyên dữ liệu đang hiển thị nếu không tải lại được.
+    }
+  }, [board.project.id])
+
+  /** Gửi thay đổi lên server; nếu bị từ chối thì báo lỗi và tải lại để giao diện khớp dữ liệu thật. */
+  const syncWithServer = (request: Promise<unknown>) => {
+    request.then(() => refresh()).catch((err) => {
+      alert(err instanceof Error ? err.message : 'Không thể lưu thay đổi.')
+      void refresh()
+    })
+  }
+
   const moveTask = (taskId: string, nextStatus: TaskStatus, reviewer?: UserSummary, properties?: TaskPropertiesUpdate) => {
     setBoard((current) => {
       const moved = current.columns.flatMap((column) => column.tasks).find((item) => item.id === taskId)
@@ -106,7 +128,7 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
         })),
       }
     })
-    void taskApi.moveTask(taskId, nextStatus, 0, reviewer?.id, properties)
+    syncWithServer(taskApi.moveTask(taskId, nextStatus, 0, reviewer?.id, properties))
   }
 
   const selectProject = (nextProjectId: string) => {
@@ -178,11 +200,27 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
     setBoard((current) => ({ ...current, columns: current.columns.map((column) => ({ ...column, tasks: column.tasks.map((task) => task.id === taskId ? updater(task) : task) })) }))
   }
 
-  const logTime = (taskId: string, entry: TimesheetEntry) => updateTask(taskId, (task) => ({ ...task, timesheets: [...task.timesheets, entry] }))
-  const addComment = (taskId: string, comment: TaskComment) => updateTask(taskId, (task) => ({ ...task, comments: task.comments + 1, commentItems: [...task.commentItems, comment] }))
+  const logTime = async (taskId: string, input: TimesheetInput): Promise<TimesheetEntry> => {
+    const entry = await taskApi.logTime(taskId, input)
+    updateTask(taskId, (task) => ({ ...task, timesheets: [entry, ...task.timesheets] }))
+    return entry
+  }
+  const removeTimesheet = async (taskId: string, entryId: string) => {
+    await taskApi.deleteTimesheet(entryId)
+    updateTask(taskId, (task) => ({ ...task, timesheets: task.timesheets.filter((entry) => entry.id !== entryId) }))
+  }
+  const addComment = async (taskId: string, body: string): Promise<TaskComment> => {
+    const comment = await taskApi.addComment(taskId, body)
+    updateTask(taskId, (task) => ({ ...task, comments: task.comments + 1, commentItems: [...task.commentItems, comment] }))
+    return comment
+  }
+  const removeComment = async (taskId: string, commentId: string) => {
+    await taskApi.deleteComment(commentId)
+    updateTask(taskId, (task) => ({ ...task, comments: Math.max(task.comments - 1, 0), commentItems: task.commentItems.filter((comment) => comment.id !== commentId) }))
+  }
   const updateReviewer = (taskId: string, reviewer: UserSummary) => {
     updateTask(taskId, (task) => ({ ...task, reviewer }))
-    void taskApi.setReviewer(taskId, reviewer.id)
+    syncWithServer(taskApi.setReviewer(taskId, reviewer.id))
   }
   const updateProperties = (taskId: string, properties: TaskPropertiesUpdate) => {
     setBoard((current) => {
@@ -198,7 +236,7 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
         acceptanceResult: properties.acceptanceResult || undefined,
       } : task) })) }
     })
-    void taskApi.updateProperties(taskId, properties)
+    syncWithServer(taskApi.updateProperties(taskId, properties))
   }
 
   const activeUserId = getActiveUser().id
@@ -214,5 +252,5 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
     }),
   })), [activeUserId, board.columns, filter, query])
 
-  return { board, projects, columns: filteredColumns, query, setQuery, filter, setFilter, loading, selectProject, createProject, moveTask, addTask, deleteTask, updateProjectMembers, logTime, addComment, updateReviewer, updateProperties }
+  return { board, projects, columns: filteredColumns, query, setQuery, filter, setFilter, loading, selectProject, createProject, moveTask, addTask, deleteTask, updateProjectMembers, logTime, removeTimesheet, addComment, removeComment, updateReviewer, updateProperties, refresh }
 }

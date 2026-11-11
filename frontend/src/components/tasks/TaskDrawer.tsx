@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { getTaskAssignees, type Task, type TaskComment, type TaskPriority, type TaskPropertiesUpdate, type TaskStatus, type TimesheetEntry, type UserSummary } from '../../types/task'
+import { getTaskAssignees, type Task, type TaskPriority, type TaskPropertiesUpdate, type TaskStatus, type TimesheetInput, type UserSummary } from '../../types/task'
 import { Avatar } from '../ui/Avatar'
 import { Icon } from '../ui/Icon'
 import { ReviewerPicker } from './ReviewerPicker'
@@ -27,11 +27,13 @@ interface TaskDrawerProps {
   onReviewerChange: (reviewer: UserSummary) => void
   onUpdateProperties: (properties: TaskPropertiesUpdate) => void
   onDelete: () => void
-  onLogTime: (entry: TimesheetEntry) => void
-  onAddComment: (comment: TaskComment) => void
+  onLogTime: (input: TimesheetInput) => Promise<void>
+  onDeleteTime: (entryId: string) => Promise<void>
+  onAddComment: (body: string) => Promise<void>
+  onDeleteComment: (commentId: string) => Promise<void>
 }
 
-export function TaskDrawer({ task, members, reviewRequested, overdueReasonRequired, onClose, onMove, onReviewerChange, onUpdateProperties, onDelete, onLogTime, onAddComment }: TaskDrawerProps) {
+export function TaskDrawer({ task, members, reviewRequested, overdueReasonRequired, onClose, onMove, onReviewerChange, onUpdateProperties, onDelete, onLogTime, onDeleteTime, onAddComment, onDeleteComment }: TaskDrawerProps) {
   const currentUser = getStoredUser()
   const [activeTab, setActiveTab] = useState<'timesheet' | 'comments'>('timesheet')
   const [menuOpen, setMenuOpen] = useState(false)
@@ -40,6 +42,9 @@ export function TaskDrawer({ task, members, reviewRequested, overdueReasonRequir
   const [endTime, setEndTime] = useState('')
   const [note, setNote] = useState('')
   const [commentBody, setCommentBody] = useState('')
+  const [overtime, setOvertime] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [actionError, setActionError] = useState('')
   const [description, setDescription] = useState(task.description)
   const [priority, setPriority] = useState<TaskPriority>(task.priority)
   const [assigneeIds, setAssigneeIds] = useState(() => getTaskAssignees(task).map((member) => member.id))
@@ -76,21 +81,44 @@ export function TaskDrawer({ task, members, reviewRequested, overdueReasonRequir
     if (window.confirm(`Xóa công việc “${task.title}”? Hành động này không thể hoàn tác.`)) onDelete()
   }
 
+  const runAction = async (action: () => Promise<void>) => {
+    setActionError('')
+    setBusy(true)
+    try {
+      await action()
+    } catch (reason) {
+      setActionError(reason instanceof Error ? reason.message : 'Thao tác thất bại. Vui lòng thử lại.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const submitTime = (event: React.FormEvent) => {
     event.preventDefault()
     const start = new Date(startTime)
     const end = new Date(endTime)
     const minutes = Math.round((end.getTime() - start.getTime()) / 60000)
     if (!startTime || !endTime || minutes <= 0 || !note.trim()) return
-    onLogTime({ id: `timesheet-${Date.now()}`, user: currentUser, startTime: start.toISOString(), endTime: end.toISOString(), minutes, note: note.trim() })
-    setStartTime(''); setEndTime(''); setNote(''); setLogging(false)
+    void runAction(async () => {
+      await onLogTime({ startTime: start.toISOString(), endTime: end.toISOString(), note: note.trim(), isOvertime: overtime })
+      setStartTime(''); setEndTime(''); setNote(''); setOvertime(false); setLogging(false)
+    })
   }
 
   const submitComment = (event: React.FormEvent) => {
     event.preventDefault()
     if (!commentBody.trim()) return
-    onAddComment({ id: `comment-${Date.now()}`, author: currentUser, body: commentBody.trim(), createdAt: new Date().toISOString() })
-    setCommentBody('')
+    void runAction(async () => {
+      await onAddComment(commentBody.trim())
+      setCommentBody('')
+    })
+  }
+
+  const removeEntry = (entryId: string) => {
+    if (window.confirm('Xóa bản ghi thời gian này?')) void runAction(() => onDeleteTime(entryId))
+  }
+  const removeComment = (commentId: string) => {
+    if (window.confirm('Xóa bình luận này?')) void runAction(() => onDeleteComment(commentId))
   }
 
   return (
@@ -118,13 +146,15 @@ export function TaskDrawer({ task, members, reviewRequested, overdueReasonRequir
 
           {activeTab === 'timesheet' && <section className="timesheet-section">
             <div className="timesheet-toolbar"><div><Icon name="calendar" size={16} /><span>Đã log</span><strong>{formatDuration(totalMinutes)}</strong></div><button className="primary-button" onClick={() => setLogging((value) => !value)}><Icon name="plus" size={16} />Ghi nhận giờ</button></div>
-            {logging && <form className="time-log-form" onSubmit={submitTime}><label>Bắt đầu<input type="datetime-local" required value={startTime} onChange={(event) => setStartTime(event.target.value)} /></label><label>Kết thúc<input type="datetime-local" required min={startTime} value={endTime} onChange={(event) => setEndTime(event.target.value)} /></label><label className="time-note">Nội dung<input required value={note} onChange={(event) => setNote(event.target.value)} placeholder="Bạn đã làm gì?" /></label><button className="primary-button" type="submit">Lưu thời gian</button></form>}
-            {task.timesheets.length ? <div className="timesheet-list">{task.timesheets.map((entry) => <div className="timesheet-entry" key={entry.id}><Avatar user={entry.user} size={28} /><div><strong>{entry.note}</strong><span>{entry.user.name} · {formatDate(entry.startTime)}</span></div><time>{formatTime(entry.startTime)}–{formatTime(entry.endTime)}<strong>{formatDuration(entry.minutes)}</strong></time></div>)}</div> : <div className="empty-timesheet">Chưa có thời gian làm việc được ghi nhận.</div>}
+            {logging && <form className="time-log-form" onSubmit={submitTime}><label>Bắt đầu<input type="datetime-local" required value={startTime} onChange={(event) => setStartTime(event.target.value)} /></label><label>Kết thúc<input type="datetime-local" required min={startTime} value={endTime} onChange={(event) => setEndTime(event.target.value)} /></label><label className="time-note">Nội dung<input required value={note} onChange={(event) => setNote(event.target.value)} placeholder="Bạn đã làm gì?" /></label><label className="time-overtime"><input type="checkbox" checked={overtime} onChange={(event) => setOvertime(event.target.checked)} />Giờ OT (ngoài giờ hành chính / cuối tuần)</label><button className="primary-button" type="submit" disabled={busy}>{busy ? 'Đang lưu...' : 'Lưu thời gian'}</button></form>}
+            {actionError && <p className="auth-error" role="alert">{actionError}</p>}
+            {task.timesheets.length ? <div className="timesheet-list">{task.timesheets.map((entry) => <div className="timesheet-entry" key={entry.id}><Avatar user={entry.user} size={28} /><div><strong>{entry.note || 'Không có ghi chú'}{entry.isOvertime && <em className="ot-badge">OT</em>}</strong><span>{entry.user.name} · {formatDate(entry.startTime)}</span></div><time>{formatTime(entry.startTime)}–{formatTime(entry.endTime)}<strong>{formatDuration(entry.minutes)}</strong></time>{entry.user.id === currentUser.id && <button type="button" className="icon-button entry-delete" onClick={() => removeEntry(entry.id)} aria-label="Xóa bản ghi" disabled={busy}><Icon name="trash" size={15} /></button>}</div>)}</div> : <div className="empty-timesheet">Chưa có thời gian làm việc được ghi nhận.</div>}
           </section>}
 
           {activeTab === 'comments' && <section className="comment-section">
-            <form className="comment-form" onSubmit={submitComment}><Avatar user={currentUser} size={31} /><textarea value={commentBody} onChange={(event) => setCommentBody(event.target.value)} placeholder="Viết bình luận..." /><button className="primary-button" type="submit" disabled={!commentBody.trim()}>Gửi</button></form>
-            <div className="comment-list">{task.commentItems.map((comment) => <article key={comment.id}><Avatar user={comment.author} size={32} /><div><header><strong>{comment.author.name}</strong><time>{formatDate(comment.createdAt)} · {formatTime(comment.createdAt)}</time></header><p>{comment.body}</p></div></article>)}{!task.commentItems.length && <div className="empty-timesheet">Chưa có bình luận nào.</div>}</div>
+            <form className="comment-form" onSubmit={submitComment}><Avatar user={currentUser} size={31} /><textarea value={commentBody} onChange={(event) => setCommentBody(event.target.value)} placeholder="Viết bình luận..." /><button className="primary-button" type="submit" disabled={!commentBody.trim() || busy}>Gửi</button></form>
+            {actionError && <p className="auth-error" role="alert">{actionError}</p>}
+            <div className="comment-list">{task.commentItems.map((comment) => <article key={comment.id}><Avatar user={comment.author} size={32} /><div><header><strong>{comment.author.name}</strong><time>{formatDate(comment.createdAt)} · {formatTime(comment.createdAt)}</time></header><p>{comment.body}</p></div>{comment.author.id === currentUser.id && <button type="button" className="icon-button entry-delete" onClick={() => removeComment(comment.id)} aria-label="Xóa bình luận" disabled={busy}><Icon name="trash" size={15} /></button>}</article>)}{!task.commentItems.length && <div className="empty-timesheet">Chưa có bình luận nào.</div>}</div>
           </section>}
         </div>
       </aside>
