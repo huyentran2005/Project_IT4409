@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from decimal import Decimal
 from sqlalchemy import func, update
 from sqlalchemy.orm import Session, joinedload
@@ -12,7 +13,9 @@ from app.schemas.task import (
     BoardColumnResponse,
     BoardDataResponse,
     CreateTaskRequest,
+    MoveTaskRequest,
     ProjectSummaryResponse,
+    TaskPropertiesRequest,
     TaskResponse,
     task_to_response,
 )
@@ -328,6 +331,11 @@ def get_project_board(
         .all()
     )
 
+    # Import trễ để tránh vòng import (collaboration_service import task_service)
+    from app.services.collaboration_service import load_task_collaboration
+
+    timesheets_by_task, comments_by_task = load_task_collaboration(db, tasks, project)
+
     status_by_id = {s.id: s for s in statuses}
     tasks_by_status: dict[uuid.UUID, list[TaskResponse]] = {s.id: [] for s in statuses}
     done_count = 0
@@ -339,7 +347,13 @@ def get_project_board(
         if st.category == "done":
             done_count += 1
         tasks_by_status[st.id].append(
-            task_to_response(t, project_key=project.key, status_code=st.code)
+            task_to_response(
+                t,
+                project_key=project.key,
+                status_code=st.code,
+                timesheets=timesheets_by_task.get(t.id),
+                comments=comments_by_task.get(t.id),
+            )
         )
 
     total_tasks = sum(len(items) for items in tasks_by_status.values())
@@ -601,3 +615,198 @@ def delete_task(
     db.add(log_entry)
 
     db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Tiến độ công việc: đổi trạng thái, người duyệt, thuộc tính chi tiết
+# ---------------------------------------------------------------------------
+def _get_live_task(db: Session, task_id: uuid.UUID) -> Task:
+    task = db.query(Task).filter(Task.id == task_id, Task.deleted_at.is_(None)).first()
+    if not task:
+        raise TaskServiceError("not_found", "Không tìm thấy công việc hoặc công việc đã bị xóa.")
+    return task
+
+
+def _require_project_member(db: Session, project_id: uuid.UUID, user_id: uuid.UUID) -> User:
+    user = (
+        db.query(User)
+        .join(
+            ProjectMember,
+            (ProjectMember.user_id == User.id) & (ProjectMember.project_id == project_id),
+        )
+        .filter(User.id == user_id, User.deleted_at.is_(None), User.is_active.is_(True))
+        .first()
+    )
+    if not user:
+        raise TaskServiceError("bad_request", "Người được chọn không phải là thành viên hợp lệ của dự án.")
+    return user
+
+
+def _apply_properties(db: Session, task: Task, props: TaskPropertiesRequest) -> dict:
+    """Áp dụng các thuộc tính được gửi lên; trả về dict thay đổi để ghi nhật ký."""
+    changes: dict = {}
+
+    if props.description is not None:
+        description = props.description.strip()
+        if not description:
+            raise TaskServiceError("bad_request", "Mô tả công việc không được để trống.")
+        if description != task.description:
+            changes["description"] = True
+            task.description = description
+    if props.priority is not None and props.priority != task.priority:
+        changes["priority"] = {"from": task.priority, "to": props.priority}
+        task.priority = props.priority
+
+    start = props.startDate or task.start_date
+    end = props.endDate or task.end_date
+    if end < start:
+        raise TaskServiceError("bad_request", "Ngày kết thúc không được trước ngày bắt đầu.")
+    if start != task.start_date or end != task.end_date:
+        changes["dates"] = {"startDate": start.isoformat(), "endDate": end.isoformat()}
+        task.start_date, task.end_date = start, end
+
+    if props.overdueReason is not None:
+        value = props.overdueReason.strip() or None
+        if value != task.overdue_reason:
+            changes["overdueReason"] = True
+            task.overdue_reason = value
+    if props.acceptanceResult is not None:
+        value = props.acceptanceResult.strip() or None
+        if value != task.acceptance_result:
+            changes["acceptanceResult"] = True
+            task.acceptance_result = value
+
+    if props.assigneeIds is not None:
+        wanted = list(dict.fromkeys(props.assigneeIds))
+        users = {uid: _require_project_member(db, task.project_id, uid) for uid in wanted}
+        current = {link.user_id for link in task.assignee_links}
+        if set(wanted) != current:
+            task.assignee_links.clear()
+            db.flush()
+            for uid in wanted:
+                link = TaskAssignee(task_id=task.id, project_id=task.project_id, user_id=uid)
+                link.user = users[uid]
+                task.assignee_links.append(link)
+            changes["assigneeIds"] = [str(uid) for uid in wanted]
+    return changes
+
+
+def _task_response(db: Session, task: Task, project: Project) -> TaskResponse:
+    from app.services.collaboration_service import load_task_collaboration
+
+    timesheets, comments = load_task_collaboration(db, [task], project)
+    return task_to_response(
+        task,
+        project_key=project.key,
+        status_code=task.status.code if task.status else None,
+        timesheets=timesheets.get(task.id),
+        comments=comments.get(task.id),
+    )
+
+
+def _log_task_update(db: Session, project: Project, task: Task, user: User, changes: dict, ip: str | None) -> None:
+    if not changes:
+        return
+    key = f"{project.key.upper()}-{task.number}"
+    db.add(
+        ActivityLog(
+            project_id=task.project_id,
+            actor_id=user.id,
+            entity_type="task",
+            entity_id=task.id,
+            action="updated",
+            description=f"Đã cập nhật công việc {key}: {task.title}",
+            changes=changes,
+            ip_address=sanitize_ip(ip),
+        )
+    )
+
+
+def move_task(
+    db: Session,
+    *,
+    task_id: uuid.UUID,
+    current_user: User,
+    payload: MoveTaskRequest,
+    client_ip: str | None = None,
+) -> TaskResponse:
+    """Đổi trạng thái (cột Kanban). Ràng buộc:
+    - vào cột 'review' phải có người duyệt (reviewer) là thành viên dự án;
+    - chuyển sang trạng thái hoàn thành (category = done) mà task đã quá hạn thì bắt buộc có lý do quá hạn;
+    - gán/xóa completed_at theo category của trạng thái đích.
+    """
+    task = _get_live_task(db, task_id)
+    project = check_task_manage_permission(db, task.project_id, current_user.id)
+
+    target = (
+        db.query(Status)
+        .filter(Status.project_id == task.project_id, Status.code == payload.status)
+        .first()
+    )
+    if not target:
+        raise TaskServiceError("bad_request", f"Trạng thái '{payload.status}' không tồn tại trong dự án này.")
+
+    changes = _apply_properties(db, task, payload)
+
+    if payload.reviewerId is not None:
+        _require_project_member(db, task.project_id, payload.reviewerId)
+        task.reviewer_id = payload.reviewerId
+        changes["reviewerId"] = str(payload.reviewerId)
+    if target.code == "review" and task.reviewer_id is None:
+        raise TaskServiceError("bad_request", "Cần chọn người duyệt trước khi chuyển sang 'Đang duyệt'.")
+
+    if task.status_id != target.id:
+        previous = db.query(Status).filter(Status.id == task.status_id).first()
+        now = datetime.now(timezone.utc)
+        if target.category == "done":
+            if task.end_date < now.astimezone(ZoneInfo("Asia/Ho_Chi_Minh")).date() and not (task.overdue_reason or "").strip():
+                raise TaskServiceError("bad_request", "Công việc đã quá hạn, cần nhập lý do quá hạn trước khi hoàn thành.")
+            task.completed_at = now
+        else:
+            task.completed_at = None
+        task.status_id = target.id
+        if payload.position is not None and payload.position > 0:
+            task.position = Decimal(str(payload.position))
+        else:
+            task.position = _compute_new_task_position(db, task.project_id, target.id)
+        changes["status"] = {"from": previous.code if previous else None, "to": target.code}
+
+    _log_task_update(db, project, task, current_user, changes, client_ip)
+    db.commit()
+    db.refresh(task)
+    return _task_response(db, task, project)
+
+
+def set_task_reviewer(
+    db: Session,
+    *,
+    task_id: uuid.UUID,
+    current_user: User,
+    reviewer_id: uuid.UUID,
+    client_ip: str | None = None,
+) -> TaskResponse:
+    task = _get_live_task(db, task_id)
+    project = check_task_manage_permission(db, task.project_id, current_user.id)
+    _require_project_member(db, task.project_id, reviewer_id)
+    task.reviewer_id = reviewer_id
+    _log_task_update(db, project, task, current_user, {"reviewerId": str(reviewer_id)}, client_ip)
+    db.commit()
+    db.refresh(task)
+    return _task_response(db, task, project)
+
+
+def update_task_properties(
+    db: Session,
+    *,
+    task_id: uuid.UUID,
+    current_user: User,
+    payload: TaskPropertiesRequest,
+    client_ip: str | None = None,
+) -> TaskResponse:
+    task = _get_live_task(db, task_id)
+    project = check_task_manage_permission(db, task.project_id, current_user.id)
+    changes = _apply_properties(db, task, payload)
+    _log_task_update(db, project, task, current_user, changes, client_ip)
+    db.commit()
+    db.refresh(task)
+    return _task_response(db, task, project)

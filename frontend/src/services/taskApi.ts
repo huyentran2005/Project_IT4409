@@ -1,4 +1,4 @@
-import type { BoardData, CreateTaskInput, Task, TaskComment, TaskPropertiesUpdate, TaskStatus, TimesheetEntry } from '../types/task'
+import type { BoardData, CreateTaskInput, Task, TaskComment, TaskPropertiesUpdate, TaskStatus, TimesheetEntry, TimesheetInput, TimesheetList, TimesheetSummary } from '../types/task'
 import { apiRequest } from './apiClient'
 
 export const taskApi = {
@@ -43,11 +43,25 @@ export const taskApi = {
   getTimesheets(taskId: string) {
     return apiRequest<TimesheetEntry[]>(`/api/tasks/${taskId}/timesheets`)
   },
-  logTime(taskId: string, payload: Omit<TimesheetEntry, 'id' | 'user' | 'minutes'>) {
+  logTime(taskId: string, payload: TimesheetInput) {
     return apiRequest<TimesheetEntry>(`/api/tasks/${taskId}/timesheets`, {
       method: 'POST',
       body: JSON.stringify(payload),
     })
+  },
+  deleteTimesheet(entryId: string) {
+    return apiRequest<void>(`/api/timesheets/${entryId}`, { method: 'DELETE' })
+  },
+  listMyTimesheets(filters: { dateFrom?: string; dateTo?: string; overtimeOnly?: boolean } = {}) {
+    const params = new URLSearchParams()
+    if (filters.dateFrom) params.set('date_from', filters.dateFrom)
+    if (filters.dateTo) params.set('date_to', filters.dateTo)
+    if (filters.overtimeOnly) params.set('overtime_only', 'true')
+    const query = params.toString()
+    return apiRequest<TimesheetList>(`/api/timesheets${query ? `?${query}` : ''}`)
+  },
+  getTimesheetSummary() {
+    return apiRequest<TimesheetSummary>('/api/timesheets/summary')
   },
   getComments(taskId: string) {
     return apiRequest<TaskComment[]>(`/api/tasks/${taskId}/comments`)
@@ -56,5 +70,8 @@ export const taskApi = {
     return apiRequest<TaskComment>(`/api/tasks/${taskId}/comments`, {
       method: 'POST', body: JSON.stringify({ body }),
     })
+  },
+  deleteComment(commentId: string) {
+    return apiRequest<void>(`/api/comments/${commentId}`, { method: 'DELETE' })
   },
 }

@@ -20,7 +20,7 @@ export function MyTasksPage({ board, onOpenTask }: { board: BoardData; onOpenTas
   const inProgress = tasks.filter((task) => task.status === 'in-progress')
   const completed = tasks.filter((task) => task.status === 'done' && task.completedAt && new Date(task.completedAt) >= last14Days[0])
   const todayTasks = tasks.filter((task) => task.endDate === dateKey(today))
-  const timesheets = tasks.flatMap((task) => task.timesheets).filter((entry) => new Date(entry.startTime) >= weekStart && new Date(entry.startTime) <= weekEnd)
+  const timesheets = tasks.flatMap((task) => task.timesheets).filter((entry) => entry.user.id === activeUserId && new Date(entry.startTime) >= weekStart && new Date(entry.startTime) <= weekEnd)
   const loggedMinutes = timesheets.reduce((sum, item) => sum + item.minutes, 0)
   const weekdays = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
   const dailyMinutes = weekdays.map((_, index) => timesheets.filter((item) => ((new Date(item.startTime).getDay() + 6) % 7) === index).reduce((sum, item) => sum + item.minutes, 0))

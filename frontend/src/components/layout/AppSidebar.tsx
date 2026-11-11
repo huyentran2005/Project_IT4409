@@ -4,6 +4,7 @@ import type { ProjectSummary } from '../../types/task'
 const navigation = [
   { icon: 'grid', label: 'Tổng quan' },
   { icon: 'check', label: 'Công việc của tôi' },
+  { icon: 'clock', label: 'Timesheet' },
 ]
 
 interface AppSidebarProps {

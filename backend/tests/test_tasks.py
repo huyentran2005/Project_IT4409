@@ -15,6 +15,7 @@ from app.models.project import Project, Status
 from app.models.project_role import Permission, ProjectRole, ProjectRolePermission
 from app.models.project_member import ProjectMember
 from app.models.task import Task, TaskAssignee, ActivityLog
+from app.models.collaboration import Comment, TimeEntry
 
 
 def _auth_headers(user: User) -> dict[str, str]:
@@ -40,6 +41,8 @@ class TaskApiTestCase(unittest.TestCase):
             Task.__table__,
             TaskAssignee.__table__,
             ActivityLog.__table__,
+            Comment.__table__,
+            TimeEntry.__table__,
         ]
         for table in tables:
             table.create(bind=self.engine, checkfirst=True)
