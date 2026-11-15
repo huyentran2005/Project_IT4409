@@ -13,19 +13,23 @@ import { AuthPage } from './pages/AuthPage'
 import { MyTasksPage } from './pages/MyTasksPage'
 import { OverviewPage } from './pages/OverviewPage'
 import { ProfilePage } from './pages/ProfilePage'
+import { TimesheetPage } from './pages/TimesheetPage'
+import { LogTimeDrawer } from './components/timesheet/LogTimeDrawer'
 import { InvitationPage } from './pages/InvitationPage'
 import { authApi, type LoginPayload, type RegisterPayload, type SsoProvider } from './services/authApi'
-import { getTaskAssignees, type Task, type TaskComment, type TaskPropertiesUpdate, type TaskStatus, type TimesheetEntry, type UserSummary } from './types/task'
+import { getTaskAssignees, type Task, type TaskPropertiesUpdate, type TaskStatus, type TimesheetInput, type UserSummary } from './types/task'
 
 function App() {
   const [authenticated, setAuthenticated] = useState(() => localStorage.getItem('taskflow-authenticated') === 'true')
-  const { board, projects, allTasks, columns, query, setQuery, filter, setFilter, loading, selectProject, createProject, moveTask, addTask, deleteTask, updateProjectMembers, logTime, addComment, updateReviewer, updateProperties } = useBoard('p-01', authenticated)
+  const { board, projects, allTasks, columns, query, setQuery, filter, setFilter, loading, selectProject, createProject, moveTask, addTask, deleteTask, updateProjectMembers, logTime, removeTimesheet, addComment, removeComment, updateReviewer, updateProperties } = useBoard('p-01', authenticated)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [deletingTask, setDeletingTask] = useState<Task | null>(null)
   const [pendingTaskMove, setPendingTaskMove] = useState<{ taskId: string; status: TaskStatus } | null>(null)
   const [creating, setCreating] = useState(false)
   const [creatingStatus, setCreatingStatus] = useState<TaskStatus>('backlog')
   const [creatingProject, setCreatingProject] = useState(false)
+  const [loggingTime, setLoggingTime] = useState(false)
+  const [timesheetVersion, setTimesheetVersion] = useState(0)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarHidden, setSidebarHidden] = useState(() => localStorage.getItem('taskflow-sidebar-hidden') === 'true')
   const [dark, setDark] = useState(false)
@@ -206,15 +210,36 @@ function App() {
     setPendingTaskMove(null)
     setSelectedTask(task)
   }
-  const logSelectedTime = (entry: TimesheetEntry) => {
+  const logSelectedTime = async (input: TimesheetInput) => {
     if (!selectedTask) return
-    logTime(selectedTask.id, entry)
-    setSelectedTask({ ...selectedTask, timesheets: [...selectedTask.timesheets, entry] })
+    const taskId = selectedTask.id
+    const entry = await logTime(taskId, input)
+    setSelectedTask((current) => current && current.id === taskId ? { ...current, timesheets: [entry, ...current.timesheets] } : current)
+    setTimesheetVersion((value) => value + 1)
   }
-  const commentOnSelectedTask = (comment: TaskComment) => {
+  const deleteSelectedTime = async (entryId: string) => {
     if (!selectedTask) return
-    addComment(selectedTask.id, comment)
-    setSelectedTask({ ...selectedTask, comments: selectedTask.comments + 1, commentItems: [...selectedTask.commentItems, comment] })
+    const taskId = selectedTask.id
+    await removeTimesheet(taskId, entryId)
+    setSelectedTask((current) => current && current.id === taskId ? { ...current, timesheets: current.timesheets.filter((entry) => entry.id !== entryId) } : current)
+    setTimesheetVersion((value) => value + 1)
+  }
+  const commentOnSelectedTask = async (body: string) => {
+    if (!selectedTask) return
+    const taskId = selectedTask.id
+    const comment = await addComment(taskId, body)
+    setSelectedTask((current) => current && current.id === taskId ? { ...current, comments: current.comments + 1, commentItems: [...current.commentItems, comment] } : current)
+  }
+  const deleteSelectedComment = async (commentId: string) => {
+    if (!selectedTask) return
+    const taskId = selectedTask.id
+    await removeComment(taskId, commentId)
+    setSelectedTask((current) => current && current.id === taskId ? { ...current, comments: Math.max(current.comments - 1, 0), commentItems: current.commentItems.filter((comment) => comment.id !== commentId) } : current)
+  }
+  const logTimeForTask = async (taskId: string, input: TimesheetInput) => {
+    const entry = await logTime(taskId, input)
+    setSelectedTask((current) => current && current.id === taskId ? { ...current, timesheets: [entry, ...current.timesheets] } : current)
+    setTimesheetVersion((value) => value + 1)
   }
   const requestDeleteTask = (taskId: string) => {
     const target = board.columns.flatMap((column) => column.tasks).find((task) => task.id === taskId)
@@ -240,15 +265,17 @@ function App() {
       <div className="app__content">
         <TopBar projectName={board.project.name} showProjectActions={activeSection === 'Dự án'} query={query} onQueryChange={setQuery} onCreate={() => { setCreatingStatus('backlog'); setCreating(true) }} onMenu={() => { if (window.matchMedia('(max-width: 900px)').matches) setSidebarOpen(true); else setDesktopSidebarHidden(false) }} onToggleTheme={() => setDark((value) => !value)} onProfile={() => setActiveSection('Hồ sơ')} onLogout={logout} />
         {loading && <div className="loading-state">Đang tải dữ liệu...</div>}
-        {!loading && activeSection === 'Tổng quan' && <OverviewPage board={board} projects={projects} allTasks={allTasks} onSelectProject={selectProject} onOpenProject={() => setActiveSection('Dự án')} onOpenMyTasks={() => setActiveSection('Công việc của tôi')} onOpenTask={openTask} />}
+        {!loading && activeSection === 'Tổng quan' && <OverviewPage board={board} projects={projects} allTasks={allTasks} timesheetVersion={timesheetVersion} onLogTime={() => setLoggingTime(true)} onSelectProject={selectProject} onOpenProject={() => setActiveSection('Dự án')} onOpenMyTasks={() => setActiveSection('Công việc của tôi')} onOpenTask={openTask} />}
         {!loading && activeSection === 'Công việc của tôi' && <MyTasksPage board={board} projects={projects} allTasks={allTasks} onOpenTask={openTask} />}
         {!loading && activeSection === 'Dự án' && <BoardPage board={board} columns={columns} filter={filter} onFilter={setFilter} onOpenTask={openTask} onMoveTask={moveBoardTask} onDeleteTask={requestDeleteTask} onCreate={(status = 'backlog') => { setCreatingStatus(status); setCreating(true) }} onMembersChange={updateProjectMembers} />}
+        {!loading && activeSection === 'Timesheet' && <TimesheetPage version={timesheetVersion} onAdd={() => setLoggingTime(true)} />}
         {!loading && activeSection === 'Hồ sơ' && <ProfilePage />}
       </div>
-      {selectedTask && <TaskDrawer key={selectedTask.id} task={selectedTask} members={board.project.members} reviewRequested={pendingTaskMove?.taskId === selectedTask.id && pendingTaskMove.status === 'review' && !selectedTask.reviewer} overdueReasonRequired={pendingTaskMove?.taskId === selectedTask.id && isTaskOverdue(selectedTask) && !selectedTask.overdueReason?.trim()} onClose={() => { setSelectedTask(null); setPendingTaskMove(null) }} onMove={moveSelectedTask} onReviewerChange={changeReviewer} onUpdateProperties={changeProperties} onDelete={() => setDeletingTask(selectedTask)} onLogTime={logSelectedTime} onAddComment={commentOnSelectedTask} />}
+      {selectedTask && <TaskDrawer key={selectedTask.id} task={selectedTask} members={board.project.members} reviewRequested={pendingTaskMove?.taskId === selectedTask.id && pendingTaskMove.status === 'review' && !selectedTask.reviewer} overdueReasonRequired={pendingTaskMove?.taskId === selectedTask.id && isTaskOverdue(selectedTask) && !selectedTask.overdueReason?.trim()} onClose={() => { setSelectedTask(null); setPendingTaskMove(null) }} onMove={moveSelectedTask} onReviewerChange={changeReviewer} onUpdateProperties={changeProperties} onDelete={() => setDeletingTask(selectedTask)} onLogTime={logSelectedTime} onDeleteTime={deleteSelectedTime} onAddComment={commentOnSelectedTask} onDeleteComment={deleteSelectedComment} />}
       {deletingTask && <DeleteTaskModal task={deletingTask} onClose={() => setDeletingTask(null)} onConfirm={confirmDeleteTask} />}
       {creating && <CreateTaskModal projectName={board.project.name} members={board.project.members} initialStatus={creatingStatus} onClose={() => setCreating(false)} onCreate={addTask} />}
       {creatingProject && <CreateProjectModal onClose={() => setCreatingProject(false)} onCreate={async (input) => { await createProject(input); setActiveSection('Dự án') }} />}
+      {loggingTime && <LogTimeDrawer tasks={allTasks} defaultTaskId={selectedTask?.id} onClose={() => setLoggingTime(false)} onSubmit={logTimeForTask} />}
     </div>
   )
 }

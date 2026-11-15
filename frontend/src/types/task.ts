@@ -24,6 +24,38 @@ export interface TimesheetEntry {
   endTime: string
   minutes: number
   note: string
+  isOvertime?: boolean
+  /** Ngày làm việc (yyyy-mm-dd, giờ Việt Nam). */
+  date?: string
+  taskId?: string
+  taskKey?: string
+  taskTitle?: string
+  projectId?: string
+  projectName?: string
+}
+
+/** Nhập theo (startTime + endTime) hoặc (date + hours). */
+export interface TimesheetInput {
+  startTime?: string
+  endTime?: string
+  date?: string
+  hours?: number
+  isOvertime?: boolean
+  note: string
+}
+
+export interface TimesheetList {
+  entries: TimesheetEntry[]
+  totalMinutes: number
+  overtimeMinutes: number
+}
+
+export interface TimesheetSummary {
+  todayMinutes: number
+  weekMinutes: number
+  weekOvertimeMinutes: number
+  missingDays: number
+  missingDates: string[]
 }
 
 export interface TaskComment {
@@ -31,6 +63,7 @@ export interface TaskComment {
   author: UserSummary
   body: string
   createdAt: string
+  parentId?: string | null
 }
 
 export interface Task {

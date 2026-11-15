@@ -1,4 +1,6 @@
-import { getTaskAssignees, type BoardData, type ProjectSummary, type Task } from '../types/task'
+import { useEffect, useState } from 'react'
+import { getTaskAssignees, type BoardData, type ProjectSummary, type Task, type TimesheetSummary } from '../types/task'
+import { taskApi } from '../services/taskApi'
 import { Avatar } from '../components/ui/Avatar'
 import { Icon } from '../components/ui/Icon'
 import { getStoredUser } from '../utils/session'
@@ -10,18 +12,26 @@ const statusLabels: Record<Task['status'], string> = {
   done: 'Hoàn thành',
 }
 
+const formatHours = (minutes: number) => `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ''}`
+
 interface OverviewPageProps {
   board: BoardData
   projects: ProjectSummary[]
   allTasks: Task[]
+  timesheetVersion: number
+  onLogTime: () => void
   onSelectProject: (projectId: string) => void
   onOpenProject: () => void
   onOpenMyTasks: () => void
   onOpenTask: (task: Task) => void
 }
 
-export function OverviewPage({ board, projects, allTasks, onSelectProject, onOpenProject, onOpenMyTasks, onOpenTask }: OverviewPageProps) {
+export function OverviewPage({ board, projects, allTasks, timesheetVersion, onLogTime, onSelectProject, onOpenProject, onOpenMyTasks, onOpenTask }: OverviewPageProps) {
   const displayUser = getStoredUser()
+  const [summary, setSummary] = useState<TimesheetSummary | null>(null)
+  useEffect(() => {
+    taskApi.getTimesheetSummary().then(setSummary).catch(() => setSummary(null))
+  }, [timesheetVersion])
   const now = new Date()
   const tasks = allTasks.length > 0 ? allTasks : board.columns.flatMap((column) => column.tasks)
   const myTasks = tasks.filter((task) => getTaskAssignees(task).some((member) => member.id === displayUser.id) && task.status !== 'done')
@@ -40,7 +50,9 @@ export function OverviewPage({ board, projects, allTasks, onSelectProject, onOpe
 
   return (
     <main className="dashboard-page">
-      <header className="dashboard-heading"><div><h1>Xin chào, {displayUser.name} <span>👋</span></h1><p>Tổng quan các dự án và công việc của bạn.</p></div></header>
+      <header className="dashboard-heading"><div><h1>Xin chào, {displayUser.name} <span>👋</span></h1><p>Tổng quan các dự án và công việc của bạn.</p></div><div className="dashboard-heading__actions"><button className="secondary-button" onClick={onLogTime}><Icon name="clock" size={16} />Log giờ</button></div></header>
+
+      {summary && <section className="dashboard-timelog" aria-label="Giờ log tuần này"><div><span>Giờ log tuần này</span><strong>{formatHours(summary.weekMinutes)}</strong>{summary.weekOvertimeMinutes > 0 && <small>trong đó OT {formatHours(summary.weekOvertimeMinutes)}</small>}</div><div><span>Hôm nay</span><strong>{formatHours(summary.todayMinutes)}</strong></div>{summary.missingDays > 0 ? <p className="warn">Thiếu log {summary.missingDays} ngày làm việc</p> : <small>Bạn đã log đủ các ngày làm việc trong tuần.</small>}</section>}
 
       <section className="dashboard-stats">
         <article><span>Tổng dự án</span><i className="stat-icon stat-icon--blue"><Icon name="folder" size={21} /></i><strong>{projects.length}</strong><small>{activeProjectsCount} đang hoạt động</small></article>
