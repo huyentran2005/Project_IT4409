@@ -58,6 +58,11 @@ export function ProfilePage() {
     event.preventDefault()
     if (!profileReady || saving) return
 
+    if (!/^[0-9]{10}$/.test(phone)) {
+      setMessage('Số điện thoại phải gồm đúng 10 chữ số.')
+      return
+    }
+
     const token = localStorage.getItem('taskflow-token')
     if (!token) {
       setMessage('Bạn cần đăng nhập lại.')
@@ -70,7 +75,7 @@ export function ProfilePage() {
     try {
       const user = await authApi.updateMe(token, {
         name: name.trim(),
-        phone: phone.trim() || null,
+        phone,
       })
 
       localStorage.setItem(
@@ -126,7 +131,7 @@ export function ProfilePage() {
       <form className="profile-account-form" onSubmit={saveProfile}>
         <label>Họ tên<input disabled={!editing || saving} value={name} onChange={(event) => setName(event.target.value)} /></label>
         <label>Email<input type="email" value={email} readOnly /></label>
-        <label>Số điện thoại<input disabled={!editing || saving} value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
+        <label>Số điện thoại<input type="tel" required inputMode="numeric" minLength={10} pattern="[0-9]{10}" title="Số điện thoại phải gồm đúng 10 chữ số" onInvalid={() => setMessage('Số điện thoại phải gồm đúng 10 chữ số.')} autoComplete="tel" disabled={!editing || saving} value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
         <label>Vai trò<input disabled value="Thành viên" /></label>
         <label>Phương thức đăng nhập<input disabled value="Google / mật khẩu" /></label>
         <label>Trạng thái<input disabled value="Tài khoản đang hoạt động" /></label>

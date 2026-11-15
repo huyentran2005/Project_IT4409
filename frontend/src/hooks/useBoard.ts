@@ -170,11 +170,35 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
         })),
       })
     })
-    taskApi.moveTask(taskId, nextStatus, 0, reviewer?.id, properties).catch((err) => {
-      setBoard(previousBoard)
-      setAllTasks(previousAllTasks)
-      alert(err instanceof Error ? err.message : 'Không thể di chuyển công việc.')
-    })
+    return taskApi.moveTask(taskId, nextStatus, 0, reviewer?.id, properties)
+      .then((saved) => {
+        setBoard((current) => ({
+          ...withCalculatedProgress({
+            ...current,
+            columns: current.columns.map((column) => ({
+              ...column,
+              tasks: column.id === saved.status
+                ? [saved, ...column.tasks.filter((task) => task.id !== taskId)]
+                : column.tasks.filter((task) => task.id !== taskId),
+            })),
+          }),
+        }))
+        setAllTasks((items) => items.map((task) => task.id === taskId ? saved : task))
+        return saved
+      })
+      .catch((err) => {
+        setBoard(previousBoard)
+        setAllTasks(previousAllTasks)
+        throw err
+      })
+  }
+
+  const loadProject = async (nextProjectId: string) => {
+    const nextBoard = await taskApi.getBoard(nextProjectId)
+    boardCache.current[nextProjectId] = nextBoard
+    setBoard(nextBoard)
+    setProjects((current) => [...current.filter((item) => item.id !== nextProjectId), nextBoard.project])
+    return nextBoard
   }
 
   const selectProject = (nextProjectId: string) => {
@@ -227,7 +251,7 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
       await taskApi.deleteTask(taskId)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Không thể xóa công việc.')
-      return
+      return false
     }
     setAllTasks((items) => items.filter((task) => task.id !== taskId))
     setBoard((current) => withCalculatedProgress({
@@ -237,6 +261,7 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
         tasks: column.tasks.filter((task) => task.id !== taskId),
       })),
     }))
+    return true
   }
 
   const updateProjectMembers = useCallback((members: UserSummary[]) => {
@@ -269,11 +294,13 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
     await taskApi.deleteComment(commentId)
     updateTask(taskId, (task) => ({ ...task, comments: Math.max(task.comments - 1, 0), commentItems: task.commentItems.filter((comment) => comment.id !== commentId) }))
   }
-  const updateReviewer = (taskId: string, reviewer: UserSummary) => {
+  const updateReviewer = async (taskId: string, reviewer: UserSummary) => {
     updateTask(taskId, (task) => ({ ...task, reviewer }))
-    syncWithServer(taskApi.setReviewer(taskId, reviewer.id))
+    const saved = await taskApi.setReviewer(taskId, reviewer.id)
+    updateTask(taskId, (task) => task.id === saved.id ? saved : task)
+    return saved
   }
-  const updateProperties = (taskId: string, properties: TaskPropertiesUpdate) => {
+  const updateProperties = async (taskId: string, properties: TaskPropertiesUpdate) => {
     setBoard((current) => {
       const assignees = current.project.members.filter((member) => properties.assigneeIds.includes(member.id))
       const applyProps = (task: Task): Task => ({
@@ -289,9 +316,10 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
       setAllTasks((items) => items.map((task) => task.id === taskId ? applyProps(task) : task))
       return { ...current, columns: current.columns.map((column) => ({ ...column, tasks: column.tasks.map((task) => task.id === taskId ? applyProps(task) : task) })) }
     })
-    syncWithServer(taskApi.updateProperties(taskId, properties))
+    const saved = await taskApi.updateProperties(taskId, properties)
+    updateTask(taskId, (task) => task.id === saved.id ? saved : task)
+    return saved
   }
-
   const activeUserId = getActiveUser().id
   const filteredColumns = useMemo(() => {
     const dueSoonLimit = new Date()
@@ -309,5 +337,5 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
     }))
   }, [activeUserId, board.columns, filter, query])
 
-  return { board, projects, allTasks, columns: filteredColumns, query, setQuery, filter, setFilter, loading, selectProject, createProject, moveTask, addTask, deleteTask, updateProjectMembers, logTime, removeTimesheet, addComment, removeComment, updateReviewer, updateProperties, refresh }
+  return { board, projects, allTasks, columns: filteredColumns, query, setQuery, filter, setFilter, loading, selectProject, loadProject, createProject, moveTask, addTask, deleteTask, updateProjectMembers, logTime, removeTimesheet, addComment, removeComment, updateReviewer, updateProperties, refresh }
 }

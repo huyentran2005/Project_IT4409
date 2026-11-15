@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { getTaskAssignees, type Task, type TaskPriority, type TaskPropertiesUpdate, type TaskStatus, type TimesheetInput, type UserSummary } from '../../types/task'
 import { Avatar } from '../ui/Avatar'
 import { Icon } from '../ui/Icon'
@@ -23,18 +23,27 @@ interface TaskDrawerProps {
   reviewRequested: boolean
   overdueReasonRequired: boolean
   onClose: () => void
-  onMove: (status: TaskStatus) => void
-  onReviewerChange: (reviewer: UserSummary) => void
-  onUpdateProperties: (properties: TaskPropertiesUpdate) => void
-  onDelete: () => void
-  onLogTime: (input: TimesheetInput) => Promise<void>
-  onDeleteTime: (entryId: string) => Promise<void>
-  onAddComment: (body: string) => Promise<void>
-  onDeleteComment: (commentId: string) => Promise<void>
+  onMove: (status: TaskStatus) => Promise<boolean>
+  onReviewerChange: (reviewer: UserSummary) => Promise<boolean>
+  onUpdateProperties: (properties: TaskPropertiesUpdate) => Promise<boolean>
+  onDelete: () => Promise<boolean>
+  onLogTime: (input: TimesheetInput) => Promise<boolean>
+  onDeleteTime: (entryId: string) => Promise<boolean>
+  onAddComment: (body: string) => Promise<boolean>
+  onDeleteComment: (commentId: string) => Promise<boolean>
 }
 
 export function TaskDrawer({ task, members, reviewRequested, overdueReasonRequired, onClose, onMove, onReviewerChange, onUpdateProperties, onDelete, onLogTime, onDeleteTime, onAddComment, onDeleteComment }: TaskDrawerProps) {
   const currentUser = getStoredUser()
+  const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
+  const saveAction = async (action: () => Promise<boolean>) => {
+    if (savingRef.current) return false
+    savingRef.current = true
+    setSaving(true)
+    try { return await action() }
+    finally { savingRef.current = false; setSaving(false) }
+  }
   const [activeTab, setActiveTab] = useState<'timesheet' | 'comments'>('timesheet')
   const [menuOpen, setMenuOpen] = useState(false)
   const [logging, setLogging] = useState(false)
@@ -65,27 +74,27 @@ export function TaskDrawer({ task, members, reviewRequested, overdueReasonRequir
     || acceptanceResult !== (task.acceptanceResult ?? '')
   const propertiesValid = Boolean(description.trim() && startDate && taskEndDate && taskEndDate >= startDate)
 
-  const saveProperties = () => {
+  const saveProperties = async () => {
     const properties = {
       description: description.trim(), priority, assigneeIds, startDate, endDate: taskEndDate,
       overdueReason: overdueReason.trim(), acceptanceResult: acceptanceResult.trim(),
     }
     if (!properties.description || !properties.startDate || properties.endDate < properties.startDate) return
-    onUpdateProperties(properties)
+    if (!await saveAction(() => onUpdateProperties(properties))) return
     setDescription(properties.description)
     setOverdueReason(properties.overdueReason)
     setAcceptanceResult(properties.acceptanceResult)
   }
   const deleteTask = () => {
     setMenuOpen(false)
-    onDelete()
+    if (window.confirm(`Xóa công việc “${task.title}”? Hành động này không thể hoàn tác.`)) void saveAction(onDelete)
   }
 
-  const runAction = async (action: () => Promise<void>) => {
+  const runAction = async (action: () => Promise<boolean>) => {
     setActionError('')
     setBusy(true)
     try {
-      await action()
+      if (!await action()) setActionError('Không thể lưu thay đổi. Vui lòng thử lại.')
     } catch (reason) {
       setActionError(reason instanceof Error ? reason.message : 'Thao tác thất bại. Vui lòng thử lại.')
     } finally {
@@ -93,24 +102,26 @@ export function TaskDrawer({ task, members, reviewRequested, overdueReasonRequir
     }
   }
 
-  const submitTime = (event: React.FormEvent) => {
+  const submitTime = async (event: React.FormEvent) => {
     event.preventDefault()
     const start = new Date(startTime)
     const end = new Date(endTime)
-    const minutes = Math.round((end.getTime() - start.getTime()) / 60000)
+    const minutes = Math.floor((end.getTime() - start.getTime()) / 60000)
     if (!startTime || !endTime || minutes <= 0 || !note.trim()) return
     void runAction(async () => {
-      await onLogTime({ startTime: start.toISOString(), endTime: end.toISOString(), note: note.trim(), isOvertime: overtime })
+      if (!await onLogTime({ startTime: start.toISOString(), endTime: end.toISOString(), note: note.trim(), isOvertime: overtime })) return false
       setStartTime(''); setEndTime(''); setNote(''); setOvertime(false); setLogging(false)
+      return true
     })
   }
 
-  const submitComment = (event: React.FormEvent) => {
+  const submitComment = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!commentBody.trim()) return
     void runAction(async () => {
-      await onAddComment(commentBody.trim())
+      if (!await onAddComment(commentBody.trim())) return false
       setCommentBody('')
+      return true
     })
   }
 
@@ -126,14 +137,15 @@ export function TaskDrawer({ task, members, reviewRequested, overdueReasonRequir
       <button className="drawer-scrim" onClick={onClose} aria-label="Đóng chi tiết" />
       <aside className="task-drawer" aria-label="Chi tiết công việc">
         <div className="drawer-header"><span>{task.key}</span><div className="drawer-actions"><div className="drawer-menu"><button className="icon-button" onClick={() => setMenuOpen((value) => !value)} aria-label="Tùy chọn công việc" aria-expanded={menuOpen}><Icon name="more" /></button>{menuOpen && <div className="task-card__menu"><button onClick={deleteTask}><Icon name="trash" size={15} />Xóa công việc</button></div>}</div><button className="icon-button" onClick={onClose} aria-label="Đóng"><Icon name="close" /></button></div></div>
-        <div className="drawer-content">
+        <fieldset className="drawer-content" disabled={saving} style={{ border: 0, margin: 0, minWidth: 0 }}>
+          {saving && <p role="status">Đang lưu...</p>}
           <span className={`task-type task-type--${task.type}`}>{task.type.toUpperCase()}</span>
           <h2>{task.title}</h2>
           <div className="detail-grid">
             <span>Mô tả</span><textarea className="task-property-input" required value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Nhập mô tả công việc..." />
-            <span>Trạng thái</span><select value={task.status} onChange={(event) => onMove(event.target.value as TaskStatus)}>{statusOptions.map((status) => <option value={status.id} key={status.id}>{status.label}</option>)}</select>
+            <span>Trạng thái</span><select value={task.status} onChange={(event) => { const status = event.target.value as TaskStatus; void saveAction(() => onMove(status)) }}>{statusOptions.map((status) => <option value={status.id} key={status.id}>{status.label}</option>)}</select>
             <span>Người thực hiện</span><AssigneePicker members={members} selectedIds={assigneeIds} onChange={setAssigneeIds} />
-            {(task.status === 'review' || reviewRequested || task.reviewer) && <><span>Người duyệt</span><ReviewerPicker members={members} reviewer={task.reviewer} required={reviewRequested || task.status === 'review'} onChange={onReviewerChange} /></>}
+            {(task.status === 'review' || reviewRequested || task.reviewer) && <><span>Người duyệt</span><ReviewerPicker members={members} reviewer={task.reviewer} required={reviewRequested || task.status === 'review'} onChange={(reviewer) => { void saveAction(() => onReviewerChange(reviewer)) }} /></>}
             <span>Ưu tiên</span><select value={priority} onChange={(event) => setPriority(event.target.value as TaskPriority)}><option value="urgent">Khẩn cấp</option><option value="high">Cao</option><option value="medium">Trung bình</option><option value="low">Thấp</option></select>
             <span>Thời gian đã log</span><strong>{formatDuration(totalMinutes)}</strong>
             <span>Ngày bắt đầu</span><input className="task-property-date" type="date" required value={startDate} max={taskEndDate} onChange={(event) => setStartDate(event.target.value)} /><span>Ngày kết thúc</span><input className="task-property-date" type="date" required value={taskEndDate} min={startDate} onChange={(event) => setTaskEndDate(event.target.value)} />
@@ -156,7 +168,7 @@ export function TaskDrawer({ task, members, reviewRequested, overdueReasonRequir
             {actionError && <p className="auth-error" role="alert">{actionError}</p>}
             <div className="comment-list">{task.commentItems.map((comment) => <article key={comment.id}><Avatar user={comment.author} size={32} /><div><header><strong>{comment.author.name}</strong><time>{formatDate(comment.createdAt)} · {formatTime(comment.createdAt)}</time></header><p>{comment.body}</p></div>{comment.author.id === currentUser.id && <button type="button" className="icon-button entry-delete" onClick={() => removeComment(comment.id)} aria-label="Xóa bình luận" disabled={busy}><Icon name="trash" size={15} /></button>}</article>)}{!task.commentItems.length && <div className="empty-timesheet">Chưa có bình luận nào.</div>}</div>
           </section>}
-        </div>
+        </fieldset>
       </aside>
     </>
   )

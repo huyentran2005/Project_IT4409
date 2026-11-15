@@ -22,7 +22,7 @@ class LoginRequest(BaseModel):
 class RegisterRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     email: str
-    phone: str | None = Field(default=None, max_length=30)
+    phone: str = Field(min_length=10, max_length=10, pattern=r"^[0-9]{10}$")#sdt phai nhap 10 so
     password: str = Field(min_length=8, max_length=128)
 
     _norm_email = field_validator("email")(_normalize_email)
@@ -34,12 +34,6 @@ class RegisterRequest(BaseModel):
         if not v:
             raise ValueError("Họ tên không được để trống")
         return v
-
-    @field_validator("phone")
-    @classmethod
-    def _clean_phone(cls, v: str | None) -> str | None:
-        v = (v or "").strip()
-        return v or None
 
 
 class RefreshRequest(BaseModel):

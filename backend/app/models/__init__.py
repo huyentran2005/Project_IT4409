@@ -1,4 +1,5 @@
 from app.db.session import Base
+from app.models.notification import Notification, NotificationSettings
 from app.models.user import User
 from app.models.oauth_account import OAuthAccount
 from app.models.auth_session import AuthSession
@@ -12,10 +13,12 @@ from app.models.project_role import (
 from app.models.project_member import ProjectMember
 from app.models.project_invitation import ProjectInvitation
 from app.models.project_content import Meeting, MeetingAttendee, ProjectDocument
-from app.models.task import Task, TaskAssignee, ActivityLog
+from app.models.task import Task, TaskAssignee, ActivityLog, TaskComment
 from app.models.collaboration import Comment, TimeEntry
 
 __all__ = [
+    "Notification",
+    "NotificationSettings",
     "Base",
     "User",
     "OAuthAccount",
@@ -36,4 +39,5 @@ __all__ = [
     "ActivityLog",
     "Comment",
     "TimeEntry",
+    "TaskComment",
 ]

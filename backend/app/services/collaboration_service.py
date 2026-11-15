@@ -25,6 +25,7 @@ from app.schemas.collaboration import (
 from app.schemas.task import TaskCommentSchema, TimesheetEntrySchema
 from app.schemas.user import user_to_summary
 from app.services.auth_service import sanitize_ip
+from app.services.notification_service import notify_task
 from app.services.task_service import TaskServiceError, check_task_manage_permission
 
 LOCAL_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
@@ -205,6 +206,7 @@ def create_time_entry(
         changes={"taskKey": key, "minutes": minutes, "isOvertime": payload.isOvertime},
         ip=client_ip,
     )
+    notify_task(db, task, user, "task_time_logged")
     db.commit()
     db.refresh(entry)
     return _entry_schema(entry, user, task, project)
@@ -325,6 +327,18 @@ def create_comment(db: Session, *, task_id: uuid.UUID, user: User, payload: Comm
             raise TaskServiceError("bad_request", "Bình luận được trả lời không tồn tại.")
     comment = Comment(task_id=task.id, author_id=user.id, parent_id=payload.parentId, body=payload.body)
     db.add(comment)
+    _log(
+        db,
+        project_id=task.project_id,
+        actor=user,
+        entity_type="task",
+        entity_id=task.id,
+        action="updated",
+        description=f"Đã thêm bình luận vào {project.key.upper()}-{task.number}",
+        changes={"comment": {"old": None, "new": {"id": str(comment.id), "body": comment.body}}},
+        ip=None,
+    )
+    notify_task(db, task, user, "task_comment")
     db.commit()
     db.refresh(comment)
     return _comment_schema(comment, user)

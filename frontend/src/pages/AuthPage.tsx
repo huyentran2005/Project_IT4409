@@ -29,6 +29,11 @@ export function AuthPage({ initialMode = 'login', onAuthenticate, onSso }: AuthP
     setError('')
     const form = new FormData(event.currentTarget)
     const password = String(form.get('password') ?? '')
+    const phone = String(form.get('phone') ?? '')
+    if (mode === 'register' && !/^[0-9]{10}$/.test(phone)) {
+      setError('Số điện thoại phải gồm đúng 10 chữ số.')
+      return
+    }
     if (mode === 'register' && password.length < 8) {
       setError('Mật khẩu cần tối thiểu 8 ký tự.')
       return
@@ -39,7 +44,7 @@ export function AuthPage({ initialMode = 'login', onAuthenticate, onSso }: AuthP
     }
     setSubmitting(true)
     try {
-      await onAuthenticate({ mode, name: String(form.get('name') ?? ''), email: String(form.get('email') ?? ''), phone: String(form.get('phone') ?? ''), password })
+      await onAuthenticate({ mode, name: String(form.get('name') ?? ''), email: String(form.get('email') ?? ''), phone, password })
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Không thể xác thực. Vui lòng thử lại.')
     } finally {
@@ -54,7 +59,7 @@ export function AuthPage({ initialMode = 'login', onAuthenticate, onSso }: AuthP
       <form onSubmit={submit}>
         {mode === 'register' && <label>Họ tên<div className="auth-input"><Icon name="user" size={20} /><input name="name" required placeholder="Nguyễn Văn A" autoComplete="name" /></div></label>}
         <label>Email<div className="auth-input"><Icon name="mail" size={20} /><input name="email" required type="email" placeholder="email@example.com" autoComplete="email" /></div></label>
-        {mode === 'register' && <label>Số điện thoại <span>(không bắt buộc)</span><div className="auth-input"><Icon name="phone" size={20} /><input name="phone" type="tel" placeholder="0912 345 678" autoComplete="tel" /></div></label>}
+        {mode === 'register' && <label>Số điện thoại<div className="auth-input"><Icon name="phone" size={20} /><input name="phone" type="tel" required inputMode="numeric" minLength={10} pattern="[0-9]{10}" title="Số điện thoại phải gồm đúng 10 chữ số" onInvalid={() => setError('Số điện thoại phải gồm đúng 10 chữ số.')} placeholder="0912345678" autoComplete="tel" /></div></label>}
         <label>Mật khẩu{mode === 'login' && <button className="forgot-password" type="button" onClick={() => setError('Nhập email và liên hệ quản trị viên để được cấp lại mật khẩu.')}>Quên mật khẩu?</button>}<div className="auth-input"><Icon name="lock" size={20} /><input name="password" required minLength={mode === 'register' ? 8 : undefined} type={showPassword ? 'text' : 'password'} placeholder={mode === 'login' ? 'Nhập mật khẩu' : 'Tạo mật khẩu'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}><Icon name="eye" size={19} /></button></div></label>
         {mode === 'register' && <label>Nhập lại mật khẩu<div className="auth-input"><Icon name="lock" size={20} /><input name="confirmPassword" required minLength={8} type={showPassword ? 'text' : 'password'} placeholder="Nhập lại mật khẩu" autoComplete="new-password" /></div></label>}
         {error && <p className="auth-error" role="alert">{error}</p>}

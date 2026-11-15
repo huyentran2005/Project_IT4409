@@ -93,6 +93,8 @@ class Task(Base):
     assignee_links = relationship(
         "TaskAssignee", back_populates="task", cascade="all, delete-orphan"
     )
+    time_entries = relationship("TimeEntry", order_by="TimeEntry.started_at", lazy="selectin")
+    comment_entries = relationship("Comment", order_by="Comment.created_at", lazy="selectin")
 
 
 class TaskAssignee(Base):
@@ -153,4 +155,9 @@ class ActivityLog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+# Compatibility names used by the activity/notification API. Canonical models
+# live in collaboration.py so SQLAlchemy registers each table only once.
+from app.models.collaboration import Comment as TaskComment, TimeEntry
 

@@ -331,7 +331,7 @@ def register(body: RegisterRequest, request: Request, db: Session = Depends(get_
     """
     Đăng ký tài khoản bằng email + mật khẩu.
 
-    Input: JSON {name, email, phone?, password (>= 8 ký tự)}.
+    Input: JSON {name, email, phone (đúng 10 chữ số), password (>= 8 ký tự)}.
     Output: 201 {accessToken, refreshToken, user}; 409 nếu email đã tồn tại; 422 nếu dữ liệu sai.
     """
     ip, ua = _client_meta(request)

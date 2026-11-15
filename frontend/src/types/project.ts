@@ -41,6 +41,14 @@ export interface ProjectDocument {
   updatedBy: string
 }
 
+export interface ActivityLogChange {
+  field: string
+  label: string
+  hasPreviousValue: boolean
+  oldValue: string | null
+  newValue: string | null
+}
+
 export interface ActivityLog {
   id: string
   actor: string
@@ -50,4 +58,5 @@ export interface ActivityLog {
   description: string
   createdAt: string
   changeCount: number
+  changeDetails: ActivityLogChange[]
 }
