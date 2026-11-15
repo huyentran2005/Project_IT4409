@@ -11,7 +11,7 @@ export const taskApi = {
       body: JSON.stringify(payload),
     })
   },
-  updateTask(taskId: string, payload: Partial<Task>) {
+  updateTask(taskId: string, payload: Partial<CreateTaskInput & TaskPropertiesUpdate> & { reviewerId?: string | null }) {
     return apiRequest<Task>(`/api/tasks/${taskId}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),

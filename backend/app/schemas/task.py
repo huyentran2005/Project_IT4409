@@ -1,8 +1,9 @@
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
+from decimal import Decimal
 from typing import Literal
-from pydantic import BaseModel, Field, field_validator, model_validator
-from app.models.task import Task
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
+from app.models.task import Task, TaskComment, TimeEntry
 from app.schemas.user import UserSummary, user_to_summary
 
 TaskStatusLiteral = Literal["backlog", "in-progress", "review", "done"]
@@ -106,6 +107,77 @@ class TaskResponse(BaseModel):
     commentItems: list[TaskCommentSchema] = Field(default_factory=list)
 
 
+class UpdateTaskRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    title: str | None = Field(default=None, min_length=1, max_length=300)
+    description: str | None = Field(default=None, min_length=1)
+    type: TaskTypeLiteral | None = None
+    priority: TaskPriorityLiteral | None = None
+    startDate: date | None = None
+    endDate: date | None = None
+    assigneeIds: list[uuid.UUID] | None = None
+    reviewerId: uuid.UUID | None = None
+    overdueReason: str | None = None
+    acceptanceResult: str | None = None
+    status: str | None = Field(default=None, min_length=1, max_length=40)
+    position: Decimal | None = Field(default=None, max_digits=20, decimal_places=10, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def validate_update(self):
+        for field in self.model_fields_set - {"reviewerId"}:
+            if getattr(self, field) is None:
+                raise ValueError(f"{field} không được để null")
+        if self.startDate and self.endDate and self.endDate < self.startDate:
+            raise ValueError("Ngày kết thúc không được trước ngày bắt đầu")
+        return self
+
+
+class MoveTaskRequest(UpdateTaskRequest):
+    status: str = Field(min_length=1, max_length=40)
+
+
+class ReviewerRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reviewerId: uuid.UUID | None
+
+
+class TimeEntryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    startTime: AwareDatetime
+    endTime: AwareDatetime
+    note: str = Field(min_length=1, max_length=10000)
+
+    @model_validator(mode="after")
+    def validate_duration(self):
+        seconds = (self.endTime - self.startTime).total_seconds()
+        if seconds < 60 or seconds // 60 > 2147483647:
+            raise ValueError("Khoảng thời gian phải từ 1 phút và không vượt giới hạn cho phép")
+        return self
+
+
+class CommentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    body: str = Field(min_length=1, max_length=10000)
+
+
+def utc_iso(value: datetime) -> str:
+    return (value if value.tzinfo else value.replace(tzinfo=timezone.utc)).isoformat()
+
+
+def time_entry_to_response(entry: TimeEntry) -> TimesheetEntrySchema:
+    return TimesheetEntrySchema(
+        id=str(entry.id), user=user_to_summary(entry.user),
+        startTime=utc_iso(entry.started_at), endTime=utc_iso(entry.ended_at),
+        minutes=int((entry.ended_at - entry.started_at).total_seconds() // 60), note=entry.note or "",
+    )
+
+
+def comment_to_response(comment: TaskComment) -> TaskCommentSchema:
+    return TaskCommentSchema(id=str(comment.id), author=user_to_summary(comment.author),
+                             body=comment.body, createdAt=utc_iso(comment.created_at))
+
+
 class BoardColumnResponse(BaseModel):
     id: str
     title: str
@@ -145,6 +217,7 @@ def task_to_response(
         if link.user is not None
     ]
     reviewer = user_to_summary(task.reviewer) if task.reviewer else None
+    comments = [comment_to_response(item) for item in task.comment_entries if item.deleted_at is None]
 
     return TaskResponse(
         id=str(task.id),
@@ -159,12 +232,12 @@ def task_to_response(
         labels=[],
         startDate=task.start_date.isoformat(),
         endDate=task.end_date.isoformat(),
-        completedAt=task.completed_at.isoformat() if task.completed_at else None,
+        completedAt=utc_iso(task.completed_at) if task.completed_at else None,
         overdueReason=task.overdue_reason,
         acceptanceResult=task.acceptance_result,
-        comments=0,
+        comments=len(comments),
         attachments=0,
         checklist=ChecklistSummary(completed=0, total=0),
-        timesheets=[],
-        commentItems=[],
+        timesheets=[time_entry_to_response(item) for item in task.time_entries],
+        commentItems=comments,
     )

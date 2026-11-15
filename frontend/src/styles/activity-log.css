@@ -1,0 +1,27 @@
+.log-list .log-entry {
+  grid-template-columns: 38px 38px minmax(0, 1fr) auto;
+  align-items: start;
+}
+.log-entry-content { min-width: 0; overflow-wrap: anywhere; }
+.log-changes {
+  margin: 12px 0 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-subtle);
+}
+.log-change { padding: 10px 12px; }
+.log-change + .log-change { border-top: 1px solid var(--border); }
+.log-change dt { margin-bottom: 6px; font-size: 12px; font-weight: 600; }
+.log-change dd { margin: 0; display: flex; gap: 12px; align-items: start; font-size: 13px; }
+.log-change-value { flex: 1; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.log-change-caption { display: block; margin-bottom: 4px; color: var(--muted); font-size: 11px; }
+.log-change-arrow { color: var(--muted); padding-top: 18px; }
+@media (max-width: 700px) {
+  .log-list .log-entry { grid-template-columns: 32px minmax(0, 1fr); padding: 12px; }
+  .log-entry > .log-action { display: none; }
+  .log-entry > .log-avatar { width: 32px; height: 32px; }
+  .log-list .log-entry > i { grid-column: 2; justify-self: start; }
+  .log-change dd { flex-direction: column; gap: 6px; }
+  .log-change-arrow { padding-top: 0; transform: rotate(90deg); }
+}

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { projectApi } from '../services/projectApi'
 import { taskApi } from '../services/taskApi'
 import type { ProjectMember } from '../types/project'
-import { getTaskAssignees, type BoardData, type BoardFilter, type CreateProjectInput, type CreateTaskInput, type ProjectSummary, type Task, type TaskComment, type TaskPropertiesUpdate, type TaskStatus, type TimesheetEntry, type UserSummary } from '../types/task'
+import { getTaskAssignees, type BoardData, type BoardFilter, type CreateProjectInput, type CreateTaskInput, type ProjectSummary, type Task, type TaskPropertiesUpdate, type TaskStatus, type TimeEntryInput, type UserSummary } from '../types/task'
 import { getStoredUser } from '../utils/session'
 
 const emptyBoard: BoardData = {
@@ -76,38 +76,22 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
       .finally(() => setLoading(false))
   }, [projectId, authenticated])
 
-  const moveTask = (taskId: string, nextStatus: TaskStatus, reviewer?: UserSummary, properties?: TaskPropertiesUpdate) => {
+  const applySavedTask = (saved: Task) => {
     setBoard((current) => {
-      const moved = current.columns.flatMap((column) => column.tasks).find((item) => item.id === taskId)
-      if (!moved || moved.status === nextStatus) return current
-      const assignees = properties
-        ? current.project.members.filter((member) => properties.assigneeIds.includes(member.id))
-        : moved.assignees
-      return {
-        ...current,
-        columns: current.columns.map((column) => ({
-          ...column,
-          tasks: column.id === nextStatus
-            ? [...column.tasks, {
-                ...moved,
-                status: nextStatus,
-                ...(reviewer ? { reviewer } : {}),
-                ...(properties ? {
-                  description: properties.description,
-                  priority: properties.priority,
-                  assignees,
-                  startDate: properties.startDate,
-                  endDate: properties.endDate,
-                  overdueReason: properties.overdueReason || undefined,
-                  acceptanceResult: properties.acceptanceResult || undefined,
-                } : {}),
-              }]
-            : column.tasks.filter((item) => item.id !== taskId),
-        })),
-      }
+      if (!current.columns.some((column) => column.tasks.some((task) => task.id === saved.id))) return current
+      const columns = current.columns.map((column) => {
+        const tasks = column.tasks.filter((task) => task.id !== saved.id)
+        return { ...column, tasks: column.id === saved.status ? [saved, ...tasks] : tasks }
+      })
+      const total = columns.reduce((count, column) => count + column.tasks.length, 0)
+      const done = columns.find((column) => column.id === 'done')?.tasks.length ?? 0
+      return { ...current, columns, project: { ...current.project, progress: total ? Math.round(done / total * 100) : 0 } }
     })
-    void taskApi.moveTask(taskId, nextStatus, 0, reviewer?.id, properties)
+    return saved
   }
+
+  const moveTask = async (taskId: string, nextStatus: TaskStatus, reviewer?: UserSummary, properties?: TaskPropertiesUpdate) =>
+    applySavedTask(await taskApi.moveTask(taskId, nextStatus, 0, reviewer?.id, properties))
 
   const selectProject = (nextProjectId: string) => {
     if (nextProjectId === board.project.id) return
@@ -156,7 +140,7 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
       await taskApi.deleteTask(taskId)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Không thể xóa công việc.')
-      return
+      return false
     }
     setBoard((current) => ({
       ...current,
@@ -165,6 +149,7 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
         tasks: column.tasks.filter((task) => task.id !== taskId),
       })),
     }))
+    return true
   }
 
   const updateProjectMembers = useCallback((members: UserSummary[]) => {
@@ -178,28 +163,20 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
     setBoard((current) => ({ ...current, columns: current.columns.map((column) => ({ ...column, tasks: column.tasks.map((task) => task.id === taskId ? updater(task) : task) })) }))
   }
 
-  const logTime = (taskId: string, entry: TimesheetEntry) => updateTask(taskId, (task) => ({ ...task, timesheets: [...task.timesheets, entry] }))
-  const addComment = (taskId: string, comment: TaskComment) => updateTask(taskId, (task) => ({ ...task, comments: task.comments + 1, commentItems: [...task.commentItems, comment] }))
-  const updateReviewer = (taskId: string, reviewer: UserSummary) => {
-    updateTask(taskId, (task) => ({ ...task, reviewer }))
-    void taskApi.setReviewer(taskId, reviewer.id)
+  const logTime = async (taskId: string, payload: TimeEntryInput) => {
+    const entry = await taskApi.logTime(taskId, payload)
+    updateTask(taskId, (task) => ({ ...task, timesheets: [...task.timesheets, entry] }))
+    return entry
   }
-  const updateProperties = (taskId: string, properties: TaskPropertiesUpdate) => {
-    setBoard((current) => {
-      const assignees = current.project.members.filter((member) => properties.assigneeIds.includes(member.id))
-      return { ...current, columns: current.columns.map((column) => ({ ...column, tasks: column.tasks.map((task) => task.id === taskId ? {
-        ...task,
-        description: properties.description,
-        priority: properties.priority,
-        assignees,
-        startDate: properties.startDate,
-        endDate: properties.endDate,
-        overdueReason: properties.overdueReason || undefined,
-        acceptanceResult: properties.acceptanceResult || undefined,
-      } : task) })) }
-    })
-    void taskApi.updateProperties(taskId, properties)
+  const addComment = async (taskId: string, body: string) => {
+    const comment = await taskApi.addComment(taskId, body)
+    updateTask(taskId, (task) => ({ ...task, comments: task.comments + 1, commentItems: [...task.commentItems, comment] }))
+    return comment
   }
+  const updateReviewer = async (taskId: string, reviewer: UserSummary) =>
+    applySavedTask(await taskApi.setReviewer(taskId, reviewer.id))
+  const updateProperties = async (taskId: string, properties: TaskPropertiesUpdate) =>
+    applySavedTask(await taskApi.updateProperties(taskId, properties))
 
   const activeUserId = getActiveUser().id
   const filteredColumns = useMemo(() => board.columns.map((column) => ({

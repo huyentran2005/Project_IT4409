@@ -14,7 +14,7 @@ from app.models.user import User
 from app.models.project import Project, Status
 from app.models.project_role import Permission, ProjectRole, ProjectRolePermission
 from app.models.project_member import ProjectMember
-from app.models.task import Task, TaskAssignee, ActivityLog
+from app.models.task import Task, TaskAssignee, ActivityLog, TimeEntry, TaskComment
 
 
 def _auth_headers(user: User) -> dict[str, str]:
@@ -22,7 +22,7 @@ def _auth_headers(user: User) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-class TaskApiTestCase(unittest.TestCase):
+class TaskApiFixture(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine(
             "sqlite://",
@@ -40,6 +40,8 @@ class TaskApiTestCase(unittest.TestCase):
             Task.__table__,
             TaskAssignee.__table__,
             ActivityLog.__table__,
+            TimeEntry.__table__,
+            TaskComment.__table__,
         ]
         for table in tables:
             table.create(bind=self.engine, checkfirst=True)
@@ -227,6 +229,7 @@ class TaskApiTestCase(unittest.TestCase):
             "outsider": outsider_user,
         }
 
+class TaskApiTestCase(TaskApiFixture):
     def test_create_task_success(self):
         project = self.seeded["project"]
         member = self.seeded["member"]

@@ -26,6 +26,8 @@ export interface TimesheetEntry {
   note: string
 }
 
+export type TimeEntryInput = Pick<TimesheetEntry, 'startTime' | 'endTime' | 'note'>
+
 export interface TaskComment {
   id: string
   author: UserSummary

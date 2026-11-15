@@ -14,7 +14,7 @@ import { OverviewPage } from './pages/OverviewPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { InvitationPage } from './pages/InvitationPage'
 import { authApi, type LoginPayload, type RegisterPayload, type SsoProvider } from './services/authApi'
-import { getTaskAssignees, type Task, type TaskComment, type TaskPropertiesUpdate, type TaskStatus, type TimesheetEntry, type UserSummary } from './types/task'
+import { getTaskAssignees, type Task, type TaskPropertiesUpdate, type TaskStatus, type TimeEntryInput, type UserSummary } from './types/task'
 
 function App() {
   const [authenticated, setAuthenticated] = useState(() => localStorage.getItem('taskflow-authenticated') === 'true')
@@ -134,19 +134,29 @@ function App() {
     }
   }
 
-  const moveSelectedTask = (status: TaskStatus) => {
-    if (!selectedTask || selectedTask.status === status) return
+  const saveSelectedTask = async (save: () => Promise<Task>) => {
+    try {
+      const saved = await save()
+      setSelectedTask((current) => current?.id === saved.id ? saved : current)
+      return true
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Không thể lưu công việc. Vui lòng thử lại.')
+      return false
+    }
+  }
+  const moveSelectedTask = async (status: TaskStatus) => {
+    if (!selectedTask || selectedTask.status === status) return false
     const needsReviewer = status === 'review' && !selectedTask.reviewer
     const needsOverdueReason = isTaskOverdue(selectedTask) && !selectedTask.overdueReason?.trim()
     if (needsReviewer || needsOverdueReason) {
       setPendingTaskMove({ taskId: selectedTask.id, status })
-      return
+      return false
     }
-    moveTask(selectedTask.id, status)
-    setPendingTaskMove(null)
-    setSelectedTask({ ...selectedTask, status })
+    const saved = await saveSelectedTask(() => moveTask(selectedTask.id, status))
+    if (saved) setPendingTaskMove(null)
+    return saved
   }
-  const moveBoardTask = (taskId: string, status: TaskStatus) => {
+  const moveBoardTask = async (taskId: string, status: TaskStatus) => {
     const task = board.columns.flatMap((column) => column.tasks).find((item) => item.id === taskId)
     if (!task || task.status === status) return
     const needsReviewer = status === 'review' && !task.reviewer
@@ -156,20 +166,21 @@ function App() {
       setPendingTaskMove({ taskId: task.id, status })
       return
     }
-    moveTask(taskId, status)
+    await saveSelectedTask(() => moveTask(taskId, status))
   }
-  const changeReviewer = (reviewer: UserSummary) => {
-    if (!selectedTask) return
+  const changeReviewer = async (reviewer: UserSummary) => {
+    if (!selectedTask) return false
     const pendingMove = pendingTaskMove?.taskId === selectedTask.id ? pendingTaskMove : null
     const stillNeedsOverdueReason = isTaskOverdue(selectedTask) && !selectedTask.overdueReason?.trim()
     const canFinishMove = pendingMove && !stillNeedsOverdueReason
-    if (canFinishMove) moveTask(selectedTask.id, pendingMove.status, reviewer, getTaskProperties(selectedTask))
-    else updateReviewer(selectedTask.id, reviewer)
-    setSelectedTask({ ...selectedTask, reviewer, ...(canFinishMove ? { status: pendingMove.status } : {}) })
-    if (canFinishMove) setPendingTaskMove(null)
+    const saved = await saveSelectedTask(() => canFinishMove
+      ? moveTask(selectedTask.id, pendingMove.status, reviewer, getTaskProperties(selectedTask))
+      : updateReviewer(selectedTask.id, reviewer))
+    if (saved && canFinishMove) setPendingTaskMove(null)
+    return saved
   }
-  const changeProperties = (properties: TaskPropertiesUpdate) => {
-    if (!selectedTask) return
+  const changeProperties = async (properties: TaskPropertiesUpdate) => {
+    if (!selectedTask) return false
     const normalizedProperties = {
       ...properties,
       description: properties.description.trim(),
@@ -180,41 +191,45 @@ function App() {
     const canFinishMove = pendingMove
       && (!isTaskOverdue(selectedTask) || Boolean(normalizedProperties.overdueReason))
       && (pendingMove.status !== 'review' || Boolean(selectedTask.reviewer))
-    if (canFinishMove) moveTask(selectedTask.id, pendingMove.status, selectedTask.reviewer, normalizedProperties)
-    else updateProperties(selectedTask.id, normalizedProperties)
-    const assignees = board.project.members.filter((member) => normalizedProperties.assigneeIds.includes(member.id))
-    setSelectedTask({
-      ...selectedTask,
-      ...(canFinishMove ? { status: pendingMove.status } : {}),
-      description: normalizedProperties.description,
-      priority: normalizedProperties.priority,
-      assignees,
-      startDate: normalizedProperties.startDate,
-      endDate: normalizedProperties.endDate,
-      overdueReason: normalizedProperties.overdueReason || undefined,
-      acceptanceResult: normalizedProperties.acceptanceResult || undefined,
-    })
-    if (canFinishMove) setPendingTaskMove(null)
+    const saved = await saveSelectedTask(() => canFinishMove
+      ? moveTask(selectedTask.id, pendingMove.status, selectedTask.reviewer, normalizedProperties)
+      : updateProperties(selectedTask.id, normalizedProperties))
+    if (saved && canFinishMove) setPendingTaskMove(null)
+    return saved
   }
   const openTask = (task: Task) => {
     setPendingTaskMove(null)
     setSelectedTask(task)
   }
-  const logSelectedTime = (entry: TimesheetEntry) => {
-    if (!selectedTask) return
-    logTime(selectedTask.id, entry)
-    setSelectedTask({ ...selectedTask, timesheets: [...selectedTask.timesheets, entry] })
+  const logSelectedTime = async (payload: TimeEntryInput) => {
+    if (!selectedTask) return false
+    try {
+      const entry = await logTime(selectedTask.id, payload)
+      setSelectedTask((current) => current?.id === selectedTask.id
+        ? { ...current, timesheets: [...current.timesheets, entry] } : current)
+      return true
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Không thể lưu thời gian làm việc.')
+      return false
+    }
   }
-  const commentOnSelectedTask = (comment: TaskComment) => {
-    if (!selectedTask) return
-    addComment(selectedTask.id, comment)
-    setSelectedTask({ ...selectedTask, comments: selectedTask.comments + 1, commentItems: [...selectedTask.commentItems, comment] })
+  const commentOnSelectedTask = async (body: string) => {
+    if (!selectedTask) return false
+    try {
+      const comment = await addComment(selectedTask.id, body)
+      setSelectedTask((current) => current?.id === selectedTask.id
+        ? { ...current, comments: current.comments + 1, commentItems: [...current.commentItems, comment] } : current)
+      return true
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Không thể lưu bình luận.')
+      return false
+    }
   }
-  const deleteSelectedTask = () => {
-    if (!selectedTask) return
-    deleteTask(selectedTask.id)
+  const deleteSelectedTask = async () => {
+    if (!selectedTask || !await deleteTask(selectedTask.id)) return false
     setPendingTaskMove(null)
-    setSelectedTask(null)
+    setSelectedTask((current) => current?.id === selectedTask.id ? null : current)
+    return true
   }
 
   if (!authenticated) return <AuthPage onAuthenticate={authenticate} onSso={authenticateWithSso} />
