@@ -21,8 +21,8 @@ DECLARE
     changed_at timestamptz;
 BEGIN
     IF (SELECT count(*) FROM pg_tables
-        WHERE schemaname = 'public' AND tablename <> 'schema_migrations') <> 31 THEN
-        RAISE EXCEPTION 'Expected 31 application tables';
+        WHERE schemaname = 'public') <> 33 THEN
+        RAISE EXCEPTION 'Expected 33 application tables';
     END IF;
     IF (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
         JOIN pg_namespace n ON n.oid = c.relnamespace

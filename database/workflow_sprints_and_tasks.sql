@@ -1,5 +1,5 @@
 -- Workflow, sprint và công việc.
--- Nguồn: docs/database-design.md. Chạy qua database/migrate.sql.
+-- Nguồn: docs/database-design.md. Được include bởi database/schema.sql.
 
 CREATE TABLE statuses (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

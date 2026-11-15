@@ -1,5 +1,5 @@
 -- Index quan trọng.
--- Nguồn: docs/database-design.md. Chạy qua database/migrate.sql.
+-- Nguồn: docs/database-design.md. Được include bởi database/schema.sql.
 
 CREATE INDEX ix_project_members_user ON project_members (user_id, project_id);
 CREATE INDEX ix_auth_sessions_user_active ON auth_sessions (user_id, expires_at) WHERE revoked_at IS NULL;

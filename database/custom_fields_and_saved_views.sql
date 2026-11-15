@@ -1,5 +1,5 @@
 -- Trường tùy chỉnh và giao diện đã lưu.
--- Nguồn: docs/database-design.md. Chạy qua database/migrate.sql.
+-- Nguồn: docs/database-design.md. Được include bởi database/schema.sql.
 
 CREATE TABLE custom_fields (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
