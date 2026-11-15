@@ -20,7 +20,7 @@ Bổ sung cho `docs/sso-guide.md`. Dùng **chung** bảng `users`, `auth_session
 
 | Method | Path | Body | Kết quả |
 |---|---|---|---|
-| POST | `/register` | `{name, email, phone?, password≥8}` | 201 `{accessToken, refreshToken, user}`; 409 email đã tồn tại; 422 dữ liệu sai |
+| POST | `/register` | `{name, email, phone (đúng 10 chữ số), password≥8}` | 201 `{accessToken, refreshToken, user}`; 409 email đã tồn tại; 422 dữ liệu sai |
 | POST | `/login` | `{email, password}` | 200 như trên; 401 sai thông tin; 403 tài khoản bị khóa |
 | POST | `/refresh` | `{refreshToken}` | 200 cặp token mới (rotation); 401 nếu sai/hết hạn/đã thu hồi |
 | POST | `/logout` | `{refreshToken?}` | 200; thu hồi phiên tương ứng |

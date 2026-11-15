@@ -1,3 +1,4 @@
+import re
 from pydantic import BaseModel, ConfigDict
 from app.models.user import User
 from pydantic import Field, field_validator
@@ -21,7 +22,14 @@ class ProfileUpdate(BaseModel):
     name: str | None = Field(
         default=None, min_length=1, max_length=120
     )
-    phone: str | None = Field(default=None, max_length=30)
+    phone: str | None = Field(default=None, min_length=10, max_length=10, pattern=r"^[0-9]{10}$")
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def validate_phone(cls, value: object) -> str:
+        if not isinstance(value, str) or re.fullmatch(r"[0-9]{10}", value) is None:
+            raise ValueError("Số điện thoại phải gồm đúng 10 chữ số")
+        return value
 
     @field_validator("name")
     @classmethod

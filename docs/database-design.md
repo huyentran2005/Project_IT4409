@@ -113,7 +113,7 @@ thể được triển khai sau mà không thay đổi cấu trúc dữ liệu l
 
 | Trường frontend | Nguồn dữ liệu | Quy tắc |
 |---|---|---|
-| `RegisterPayload.name`, `phone` | `users.full_name`, `phone` | `phone` không bắt buộc; email được so sánh không phân biệt hoa thường |
+| `RegisterPayload.name`, `phone` | `users.full_name`, `phone` | `phone` bắt buộc khi đăng ký bằng mật khẩu, gồm đúng 10 chữ số; email được so sánh không phân biệt hoa thường |
 | `UserSummary.id`, `name`, `email`, `avatarUrl` | `users.id`, `full_name`, `email`, `avatar_url` | Không trả `password_hash` qua API |
 | `ProjectSummary.id`, `key`, `name`, `description`, `color` | Các cột tương ứng trong `projects` | `key` trả về chữ hoa; `description` và `color` luôn có giá trị |
 | `ProjectSummary.members[]` | `project_members`, `users` | Chỉ trả thành viên thuộc dự án hiện tại |
@@ -159,7 +159,7 @@ chỉ thay đổi khi thêm hoặc sửa bản ghi trong `time_entries`.
 
 | Endpoint frontend đang gọi | Bảng bị tác động | Dữ liệu chính |
 |---|---|---|
-| `POST /api/auth/register` | `users`, `auth_sessions` | `name`, `email`, `phone?`, `password` |
+| `POST /api/auth/register` | `users`, `auth_sessions` | `name`, `email`, `phone` (đúng 10 chữ số), `password` |
 | `POST /api/auth/login` | `auth_sessions` | `email`, `password`; trả `accessToken` và `UserSummary` |
 | `POST /api/projects` | `projects`, `project_roles`, `project_role_permissions`, `project_members`, `statuses` | `name`, `key`, `description`, `color` |
 | `POST /api/projects/{projectId}/tasks` | `tasks`, `task_assignees` | `title`, `description`, `type`, `priority`, `startDate`, `endDate`, `assigneeIds[]`, `status` |

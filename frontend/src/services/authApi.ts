@@ -8,7 +8,7 @@ export interface LoginPayload {
 
 export interface RegisterPayload extends LoginPayload {
   name: string
-  phone?: string
+  phone: string
 }
 
 export interface AuthResponse {
@@ -25,7 +25,7 @@ export interface ProfileResponse extends UserSummary {
 
 export interface ProfileUpdatePayload {
   name?: string
-  phone?: string | null
+  phone?: string
 }
 
 export const authApi = {

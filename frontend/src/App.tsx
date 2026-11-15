@@ -57,7 +57,7 @@ function App() {
   const authenticate = async (data: { mode: 'login' | 'register'; name?: string; email: string; phone?: string; password: string }) => {
     const response = data.mode === 'login'
       ? await authApi.login({ email: data.email, password: data.password } satisfies LoginPayload)
-      : await authApi.register({ name: data.name ?? '', email: data.email, phone: data.phone, password: data.password } satisfies RegisterPayload)
+      : await authApi.register({ name: data.name ?? '', email: data.email, phone: data.phone ?? '', password: data.password } satisfies RegisterPayload)
     localStorage.setItem('taskflow-token', response.accessToken)
     localStorage.setItem('taskflow-refresh-token', response.refreshToken)
     localStorage.setItem('taskflow-current-user', JSON.stringify(response.user))
