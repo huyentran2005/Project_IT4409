@@ -23,6 +23,13 @@ class TimesheetEntrySchema(BaseModel):
     endTime: str
     minutes: int
     note: str
+    isOvertime: bool = False
+    date: str | None = None
+    taskId: str | None = None
+    taskKey: str | None = None
+    taskTitle: str | None = None
+    projectId: str | None = None
+    projectName: str | None = None
 
 
 class TaskCommentSchema(BaseModel):
@@ -30,6 +37,7 @@ class TaskCommentSchema(BaseModel):
     author: UserSummary
     body: str
     createdAt: str
+    parentId: str | None = None
 
 
 class ChecklistSummary(BaseModel):
@@ -206,6 +214,8 @@ def task_to_response(
     *,
     project_key: str | None = None,
     status_code: str | None = None,
+    timesheets: list[TimesheetEntrySchema] | None = None,
+    comments: list[TaskCommentSchema] | None = None,
 ) -> TaskResponse:
     resolved_project_key = (
         project_key or (task.project.key if task.project else "TASK")
@@ -237,9 +247,9 @@ def task_to_response(
         completedAt=task.completed_at.isoformat() if task.completed_at else None,
         overdueReason=task.overdue_reason,
         acceptanceResult=task.acceptance_result,
-        comments=0,
+        comments=len(comments or []),
         attachments=0,
         checklist=ChecklistSummary(completed=0, total=0),
-        timesheets=[],
-        commentItems=[],
+        timesheets=timesheets or [],
+        commentItems=comments or [],
     )

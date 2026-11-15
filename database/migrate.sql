@@ -44,6 +44,17 @@ SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = 3) AS migration_0
     VALUES (3, 'remove_status_wip_limits');
 \endif
 
+SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = 4) AS migration_004_applied
+\gset
+
+\if :migration_004_applied
+    \echo 'Migration 004 already applied; existing data preserved.'
+\else
+    \ir migrations/004_time_entries_overtime.sql
+    INSERT INTO schema_migrations (version, name)
+    VALUES (4, 'time_entries_overtime');
+\endif
+
 SELECT format('ALTER DATABASE %I SET timezone TO %L', current_database(), 'UTC')
 \gexec
 COMMIT;

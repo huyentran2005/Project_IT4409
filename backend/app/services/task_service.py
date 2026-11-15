@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from decimal import Decimal
 from sqlalchemy import func, update
 from sqlalchemy.orm import Session, joinedload
@@ -221,6 +222,11 @@ def get_project_board(
         .all()
     )
 
+    # Import trễ để tránh vòng import (collaboration_service import task_service)
+    from app.services.collaboration_service import load_task_collaboration
+
+    timesheets_by_task, comments_by_task = load_task_collaboration(db, tasks, project)
+
     status_by_id = {s.id: s for s in statuses}
     tasks_by_status: dict[uuid.UUID, list[TaskResponse]] = {s.id: [] for s in statuses}
     done_count = 0
@@ -232,7 +238,13 @@ def get_project_board(
         if st.category == "done":
             done_count += 1
         tasks_by_status[st.id].append(
-            task_to_response(t, project_key=project.key, status_code=st.code)
+            task_to_response(
+                t,
+                project_key=project.key,
+                status_code=st.code,
+                timesheets=timesheets_by_task.get(t.id),
+                comments=comments_by_task.get(t.id),
+            )
         )
 
     total_tasks = sum(len(items) for items in tasks_by_status.values())
@@ -767,6 +779,15 @@ def move_task(
     now = datetime.now(timezone.utc)
 
     if status_obj.id != task.status_id:
+        if (
+            status_obj.category == "done"
+            and task.end_date < now.astimezone(ZoneInfo("Asia/Ho_Chi_Minh")).date()
+            and not (task.overdue_reason or "").strip()
+        ):
+            raise TaskServiceError(
+                "bad_request",
+                "Công việc đã quá hạn, cần nhập lý do quá hạn trước khi hoàn thành.",
+            )
         task.position = _compute_end_task_position(
             db, task.project_id, status_obj.id, exclude_task_id=task.id
         )
