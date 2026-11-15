@@ -6,6 +6,7 @@ Quyền (theo project_members -> project_role_permissions -> permissions):
   - tải lên / xóa tài liệu   : document.manage
 """
 import json
+import logging
 import mimetypes
 import os
 import re
@@ -15,6 +16,7 @@ from datetime import datetime
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
+from agent.store import project_collection_name, store as vector_store
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import text
@@ -27,8 +29,10 @@ from app.models.project_content import Meeting, MeetingAttendee, ProjectDocument
 from app.models.user import User
 from app.schemas.project_content import DocumentOut, MeetingCreate, MeetingOut
 from app.services import storage
+from app.services.document_jobs import enqueue_document_processing
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["meetings & documents"])
+logger = logging.getLogger(__name__)
 
 # Chỉ cho phép định dạng văn phòng/ảnh phổ biến. KHÔNG cho html/svg/js để tránh XSS khi tải về.
 ALLOWED_EXTENSIONS = {
@@ -170,6 +174,7 @@ def _document_out(doc: ProjectDocument, updated_by_name: str) -> DocumentOut:
     return DocumentOut(
         id=str(doc.id), name=doc.name, type=ext, size=_format_size(doc.size_bytes),
         updatedAt=doc.updated_at.isoformat(), updatedBy=updated_by_name,
+        processingStatus=doc.processing_status, processingError=doc.processing_error,
     )
 
 
@@ -242,9 +247,12 @@ def upload_document(
     except storage.StorageError:
         raise _storage_unavailable()
 
+    processable = ext in {"pdf", "doc", "docx"}
     doc = ProjectDocument(
         project_id=access.project_id, uploaded_by=access.user.id, updated_by=access.user.id,
         name=name, object_key=object_key, mime_type=mime, size_bytes=size,
+        processing_status="queued" if processable else "unsupported",
+        processing_error=None if processable else "Định dạng này được lưu trữ nhưng chưa hỗ trợ trích xuất nội dung.",
     )
     try:
         db.add(doc)
@@ -255,6 +263,25 @@ def upload_document(
         db.rollback()
         storage.remove_object(object_key)  # tránh file mồ côi trên MinIO
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Không lưu được thông tin tài liệu")
+    db.refresh(doc)
+    if processable:
+        enqueue_document_processing(doc, db)
+        db.refresh(doc)
+    return _document_out(doc, access.user.full_name)
+
+
+@router.post("/documents/{document_id}/process", response_model=DocumentOut)
+def reprocess_document(
+    document_id: uuid.UUID,
+    access: ProjectAccess = Depends(project_permission("document.manage")),
+    db: Session = Depends(get_db),
+):
+    """Tạo lại job xử lý cho tài liệu đã tải lên."""
+    doc = _get_document(db, access, document_id)
+    ext = os.path.splitext(doc.name)[1].lstrip(".").lower()
+    if ext not in {"pdf", "doc", "docx"}:
+        raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Định dạng này chưa hỗ trợ xử lý nội dung")
+    enqueue_document_processing(doc, db)
     db.refresh(doc)
     return _document_out(doc, access.user.full_name)
 
@@ -309,3 +336,9 @@ def delete_document(
     doc.updated_by = access.user.id
     _log_activity(db, access, "document", doc.id, "deleted", f"đã xóa tài liệu · {doc.name}")
     db.commit()
+    try:
+        vector_store.delete_source(
+            f"project-document:{doc.id}", project_collection_name(str(doc.project_id))
+        )
+    except Exception:
+        logger.exception("Could not remove deleted document %s from Qdrant", doc.id)

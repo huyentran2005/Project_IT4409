@@ -11,6 +11,8 @@ from app.api.project_invitations import (
     router as project_invitation_router,
 )
 from app.api.project_permissions import router as project_permission_router
+from app.api.chatbot import project_router as project_chatbot_router
+from app.api.chatbot import router as chatbot_router
 
 app = FastAPI(title=settings.PROJECT_NAME)
 
@@ -40,6 +42,8 @@ app.include_router(project_invitation_router, prefix="/api")
 app.include_router(invitation_router, prefix="/api")
 app.include_router(project_content_router, prefix="/api")
 app.include_router(tasks_router, prefix="/api")
+app.include_router(chatbot_router, prefix="/api")
+app.include_router(project_chatbot_router, prefix="/api")
 
 
 @app.get("/health")
