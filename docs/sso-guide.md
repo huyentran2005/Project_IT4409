@@ -163,7 +163,7 @@ https://project.aiservice.vn/projects/e82b8c53-46ba-4933-bc09-4aeed9bff681/tasks
 ### Bước 2: Nạp cấu trúc Database (Chỉ cần chạy 1 lần đầu tiên)
 Nếu PostgreSQL của bạn vừa tạo mới hoặc chưa nạp bảng:
 ```bash
-docker compose cp ./database db:/database && docker compose exec -w /database db psql -U task_user -d task_db -f migrate.sql
+docker compose cp ./database db:/database && docker compose exec -w /database db psql -U task_user -d task_db -f schema.sql
 ```
 
 ### Bước 3: Khởi động hệ thống với Docker
