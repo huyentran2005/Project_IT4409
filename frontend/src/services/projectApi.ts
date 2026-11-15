@@ -3,6 +3,9 @@ import type { CreateProjectInput, ProjectSummary } from '../types/task'
 import { API_BASE_URL, ApiError, apiRequest, authHeaders, readErrorMessage } from './apiClient'
 
 export const projectApi = {
+  listProjects() {
+    return apiRequest<ProjectSummary[]>('/api/projects')
+  },
   createProject(payload: CreateProjectInput) {
     return apiRequest<ProjectSummary>('/api/projects', {
       method: 'POST', body: JSON.stringify(payload),

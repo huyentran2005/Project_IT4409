@@ -12,8 +12,11 @@ from app.schemas.task import (
     BoardColumnResponse,
     BoardDataResponse,
     CreateTaskRequest,
+    MoveTaskRequest,
     ProjectSummaryResponse,
+    SetReviewerRequest,
     TaskResponse,
+    UpdateTaskPropertiesRequest,
     task_to_response,
 )
 from app.schemas.user import user_to_summary
@@ -27,166 +30,38 @@ class TaskServiceError(Exception):
         self.message = message
 
 
-_DEFAULT_PERMISSIONS = [
-    ("project.manage", "Quản lý dự án", "Sửa thông tin và cấu hình dự án"),
-    ("member.manage", "Quản lý thành viên", "Mời, đổi vai trò và xóa thành viên"),
-    ("task.manage", "Quản lý công việc", "Tạo, sửa và di chuyển công việc"),
-    ("document.manage", "Quản lý tài liệu", "Tải lên, cập nhật và xóa tài liệu"),
-    ("project.view", "Xem dự án", "Xem bảng, thành viên và tài liệu"),
-]
-
-_DEFAULT_STATUSES = [
-    ("backlog", "Cần làm", "todo", "#64748b", Decimal("1000"), None),
-    ("in-progress", "Đang làm", "in_progress", "#2563eb", Decimal("2000"), None),
-    ("review", "Đang duyệt", "in_progress", "#d97706", Decimal("3000"), None),
-    ("done", "Hoàn thành", "done", "#0f9f8f", Decimal("4000"), None),
-]
-
-
-def ensure_default_project_for_user(db: Session, user: User) -> Project:
-    """
-    Tìm dự án đầu tiên mà user là thành viên. Nếu user chưa có dự án nào
-    (ví dụ: vừa đăng ký hoặc chưa chạy API tạo dự án), tự động khởi tạo
-    dự án mặc định đủ Role, Permission và 4 cột Status chuẩn để thao tác ngay trên FE.
-    """
-    existing = (
-        db.query(Project)
-        .join(ProjectMember, ProjectMember.project_id == Project.id)
-        .filter(
-            ProjectMember.user_id == user.id,
-            Project.deleted_at.is_(None),
-        )
-        .order_by(Project.created_at.asc())
-        .first()
-    )
-    if existing:
-        return existing
-
-    # Tìm key chưa trùng (TF, TF1, TF2...)
-    base_key = "TF"
-    candidate_key = base_key
-    suffix = 1
-    while (
-        db.query(Project)
-        .filter(
-            func.upper(Project.key) == candidate_key,
-            Project.deleted_at.is_(None),
-        )
-        .first()
-        is not None
-    ):
-        candidate_key = f"{base_key}{suffix}"
-        suffix += 1
-
-    project = Project(
-        owner_id=user.id,
-        name="TaskFlow Web App",
-        key=candidate_key,
-        description="Nền tảng quản lý công việc cho đội ngũ sản phẩm",
-        color="#5B5CE2",
-        task_sequence=0,
-    )
-    db.add(project)
-    db.flush()
-
-    # Đảm bảo danh mục permissions có đủ 5 mã chuẩn
-    perms_by_code: dict[str, Permission] = {}
-    for code, name, desc in _DEFAULT_PERMISSIONS:
-        perm = db.query(Permission).filter(Permission.code == code).first()
-        if not perm:
-            perm = Permission(code=code, name=name, description=desc)
-            db.add(perm)
-            db.flush()
-        perms_by_code[code] = perm
-
-    role_configs = [
-        (
-            "owner",
-            "Owner",
-            1,
-            [
-                "project.manage",
-                "member.manage",
-                "task.manage",
-                "document.manage",
-                "project.view",
-            ],
-        ),
-        (
-            "manager",
-            "Manager",
-            2,
-            ["member.manage", "task.manage", "document.manage", "project.view"],
-        ),
-        (
-            "member",
-            "Member",
-            3,
-            ["task.manage", "document.manage", "project.view"],
-        ),
-        ("viewer", "Viewer", 4, ["project.view"]),
-    ]
-
-    owner_role: ProjectRole | None = None
-    for r_code, r_name, r_pos, perm_codes in role_configs:
-        role = ProjectRole(
-            project_id=project.id,
-            code=r_code,
-            name=r_name,
-            is_system=True,
-            position=r_pos,
-        )
-        db.add(role)
-        db.flush()
-        if r_code == "owner":
-            owner_role = role
-        for p_code in perm_codes:
-            db.add(
-                ProjectRolePermission(
-                    role_id=role.id,
-                    permission_id=perms_by_code[p_code].id,
-                )
-            )
-
-    assert owner_role is not None
-    db.add(
-        ProjectMember(
-            project_id=project.id,
-            user_id=user.id,
-            role_id=owner_role.id,
-        )
-    )
-
-    for s_code, s_name, s_cat, s_color, s_pos, s_limit in _DEFAULT_STATUSES:
-        db.add(
-            Status(
-                project_id=project.id,
-                code=s_code,
-                name=s_name,
-                category=s_cat,
-                color=s_color,
-                position=s_pos,
-                wip_limit=s_limit,
-            )
-        )
-
-    db.commit()
-    db.refresh(project)
-    return project
-
-
 def resolve_project_id(
     db: Session, project_id_or_alias: str, user: User
 ) -> uuid.UUID:
     """
     Chuyển chuỗi project_id trên URL thành UUID thực tế.
-    Hỗ trợ cả UUID thật lẫn mã giả định 'p-01' trên Frontend khi chưa chọn dự án.
+    Nếu truyền mã mặc định (như 'p-01'), trả về dự án đầu tiên mà user là thành viên.
+
+    Input (Đầu vào):
+        - db (Session): Phiên kết nối cơ sở dữ liệu.
+        - project_id_or_alias (str): Chuỗi UUID dự án hoặc mã giả định ('p-01').
+        - user (User): Người dùng hiện tại.
+
+    Output (Đầu ra):
+        - uuid.UUID: Định danh UUID thực tế của dự án.
+        - Raise TaskServiceError ('not_found') nếu không tìm thấy dự án.
     """
     try:
         return uuid.UUID(project_id_or_alias)
     except (ValueError, TypeError):
-        project = ensure_default_project_for_user(db, user)
-        return project.id
+        existing = (
+            db.query(Project)
+            .join(ProjectMember, ProjectMember.project_id == Project.id)
+            .filter(
+                ProjectMember.user_id == user.id,
+                Project.deleted_at.is_(None),
+            )
+            .order_by(Project.created_at.asc())
+            .first()
+        )
+        if not existing:
+            raise TaskServiceError("not_found", "Không tìm thấy dự án.")
+        return existing.id
 
 
 def check_task_manage_permission(
@@ -195,6 +70,15 @@ def check_task_manage_permission(
     """
     Kiểm tra dự án tồn tại, chưa bị xóa/lưu trữ và người dùng hiện tại
     là thành viên có quyền 'task.manage' trong dự án.
+
+    Input (Đầu vào):
+        - db (Session): Phiên kết nối cơ sở dữ liệu.
+        - project_id (UUID): Định danh dự án.
+        - user_id (UUID): Định danh người dùng cần kiểm tra quyền.
+
+    Output (Đầu ra):
+        - Project: Bản ghi dự án hợp lệ.
+        - Raise TaskServiceError ('not_found', 'bad_request', 'forbidden') nếu không hợp lệ.
     """
     project = (
         db.query(Project)
@@ -271,6 +155,15 @@ def get_project_board(
     """
     Trả về dữ liệu Board (ProjectSummary + danh sách cột kèm các Task chưa xóa)
     để hiển thị trực tiếp trên giao diện Kanban của Frontend.
+
+    Input (Đầu vào):
+        - db (Session): Phiên kết nối cơ sở dữ liệu.
+        - project_id_or_alias (str): Chuỗi UUID dự án hoặc mã giả định ('p-01').
+        - current_user (User): Người dùng đang đăng nhập.
+
+    Output (Đầu ra):
+        - BoardDataResponse: Thông tin dự án, thành viên, tiến độ % và danh sách các cột kèm công việc.
+        - Raise TaskServiceError ('not_found', 'forbidden') nếu không tìm thấy hoặc không thuộc dự án.
     """
     project_id = resolve_project_id(db, project_id_or_alias, current_user)
     project = (
@@ -364,10 +257,51 @@ def get_project_board(
             description=project.description,
             color=project.color,
             progress=progress,
+            totalTasks=total_tasks,
+            doneTasks=done_count,
             members=[user_to_summary(u) for u in member_users],
         ),
         columns=columns,
     )
+
+
+def list_all_user_tasks(
+    db: Session,
+    *,
+    current_user: User,
+) -> list[TaskResponse]:
+    """
+    Lấy toàn bộ danh sách công việc (chưa xóa) thuộc tất cả các dự án mà người dùng hiện tại tham gia.
+
+    Input (Đầu vào):
+        - db (Session): Phiên kết nối cơ sở dữ liệu.
+        - current_user (User): Người dùng đang đăng nhập.
+
+    Output (Đầu ra):
+        - list[TaskResponse]: Danh sách toàn bộ công việc chưa xóa trên tất cả dự án của người dùng.
+    """
+    tasks = (
+        db.query(Task)
+        .join(Project, Project.id == Task.project_id)
+        .join(
+            ProjectMember,
+            (ProjectMember.project_id == Project.id)
+            & (ProjectMember.user_id == current_user.id),
+        )
+        .options(
+            joinedload(Task.project),
+            joinedload(Task.status),
+            joinedload(Task.assignee_links).joinedload(TaskAssignee.user),
+            joinedload(Task.reviewer),
+        )
+        .filter(
+            Project.deleted_at.is_(None),
+            Task.deleted_at.is_(None),
+        )
+        .order_by(Task.created_at.desc())
+        .all()
+    )
+    return [task_to_response(t) for t in tasks]
 
 
 def list_project_tasks(
@@ -378,6 +312,14 @@ def list_project_tasks(
 ) -> list[TaskResponse]:
     """
     Lấy danh sách phẳng toàn bộ các công việc chưa xóa của dự án.
+
+    Input (Đầu vào):
+        - db (Session): Phiên kết nối cơ sở dữ liệu.
+        - project_id_or_alias (str): Chuỗi UUID dự án hoặc mã giả định ('p-01').
+        - current_user (User): Người dùng đang đăng nhập.
+
+    Output (Đầu ra):
+        - list[TaskResponse]: Danh sách tất cả công việc chưa xóa của dự án.
     """
     board = get_project_board(
         db,
@@ -392,6 +334,14 @@ def _compute_new_task_position(
 ) -> Decimal:
     """
     Tính toán vị trí (position) cho task mới để đặt ở đầu cột trạng thái.
+
+    Input (Đầu vào):
+        - db (Session): Phiên kết nối cơ sở dữ liệu.
+        - project_id (UUID): Định danh dự án.
+        - status_id (UUID): Định danh cột trạng thái.
+
+    Output (Đầu ra):
+        - Decimal: Giá trị position mới nhỏ hơn position nhỏ nhất hiện tại trong cột.
     """
     min_position = (
         db.query(func.min(Task.position))
@@ -419,12 +369,18 @@ def create_task(
     client_ip: str | None = None,
 ) -> TaskResponse:
     """
-    Tạo công việc mới trong dự án:
-    1. Kiểm tra dự án & quyền 'task.manage' của người dùng.
-    2. Tra cứu trạng thái (status) theo code và kiểm tra WIP limit.
-    3. Kiểm tra toàn bộ assigneeIds đều là thành viên của dự án.
-    4. Tăng nguyên tử projects.task_sequence để sinh số thứ tự task.
-    5. Lưu Task, TaskAssignee và ActivityLog trong cùng 1 transaction.
+    Tạo công việc mới trong dự án.
+
+    Input (Đầu vào):
+        - db (Session): Phiên kết nối cơ sở dữ liệu.
+        - project_id (UUID): Định danh dự án.
+        - current_user (User): Người dùng tạo công việc (reporter).
+        - payload (CreateTaskRequest): Dữ liệu công việc cần tạo (`title`, `description`, `type`, `priority`, `startDate`, `endDate`, `assigneeIds`, `status`).
+        - client_ip (str | None): Địa chỉ IP của client để ghi nhận ActivityLog.
+
+    Output (Đầu ra):
+        - TaskResponse: Đối tượng công việc vừa tạo.
+        - Raise TaskServiceError ('not_found', 'forbidden', 'bad_request') nếu không hợp lệ.
     """
     project = check_task_manage_permission(db, project_id, current_user.id)
 
@@ -563,10 +519,17 @@ def delete_task(
     client_ip: str | None = None,
 ) -> None:
     """
-    Xóa mềm công việc (gán tasks.deleted_at = now()):
-    1. Tìm công việc chưa bị xóa.
-    2. Kiểm tra quyền 'task.manage' của người dùng trên dự án chứa công việc.
-    3. Cập nhật deleted_at và ghi nhận ActivityLog.
+    Xóa mềm công việc (gán tasks.deleted_at = now()).
+
+    Input (Đầu vào):
+        - db (Session): Phiên kết nối cơ sở dữ liệu.
+        - task_id (UUID): Định danh công việc cần xóa.
+        - current_user (User): Người dùng thực hiện xóa.
+        - client_ip (str | None): Địa chỉ IP của client để ghi nhận ActivityLog.
+
+    Output (Đầu ra):
+        - None (Cập nhật `deleted_at` và lưu `ActivityLog`).
+        - Raise TaskServiceError ('not_found', 'forbidden') nếu không tìm thấy hoặc không đủ quyền.
     """
     task = (
         db.query(Task)
@@ -601,3 +564,397 @@ def delete_task(
     db.add(log_entry)
 
     db.commit()
+
+
+def _compute_end_task_position(
+    db: Session,
+    project_id: uuid.UUID,
+    status_id: uuid.UUID,
+    exclude_task_id: uuid.UUID | None = None,
+) -> Decimal:
+    """
+    Tính toán vị trí (position) cho task được kéo thả sang cột mới (đặt ở cuối cột).
+
+    Input (Đầu vào):
+        - db (Session): Phiên kết nối cơ sở dữ liệu.
+        - project_id (UUID): Định danh dự án.
+        - status_id (UUID): Định danh cột trạng thái đích.
+        - exclude_task_id (UUID | None): ID của task đang di chuyển để loại trừ khi tính max.
+
+    Output (Đầu ra):
+        - Decimal: Giá trị position mới ở cuối cột trạng thái đích.
+    """
+    query = db.query(func.max(Task.position)).filter(
+        Task.project_id == project_id,
+        Task.status_id == status_id,
+        Task.deleted_at.is_(None),
+    )
+    if exclude_task_id is not None:
+        query = query.filter(Task.id != exclude_task_id)
+    max_position = query.scalar()
+    if max_position is None:
+        return Decimal("1000")
+    return Decimal(str(max_position)) + Decimal("1000")
+
+
+def _resolve_project_member_users(
+    db: Session, project_id: uuid.UUID, user_ids: list[uuid.UUID]
+) -> list[User]:
+    """
+    Kiểm tra và trả về danh sách bản ghi User thuộc dự án theo danh sách ID.
+
+    Input (Đầu vào):
+        - db (Session): Phiên kết nối cơ sở dữ liệu.
+        - project_id (UUID): Định danh dự án.
+        - user_ids (list[UUID]): Danh sách ID người dùng cần kiểm tra.
+
+    Output (Đầu ra):
+        - list[User]: Danh sách đối tượng User hợp lệ theo đúng thứ tự `user_ids`.
+        - Raise TaskServiceError ('bad_request') nếu có user không thuộc dự án.
+    """
+    if not user_ids:
+        return []
+    rows = (
+        db.query(User)
+        .join(
+            ProjectMember,
+            (ProjectMember.user_id == User.id)
+            & (ProjectMember.project_id == project_id),
+        )
+        .filter(
+            User.id.in_(user_ids),
+            User.deleted_at.is_(None),
+            User.is_active.is_(True),
+        )
+        .all()
+    )
+    users_by_id = {u.id: u for u in rows}
+    missing = [uid for uid in user_ids if uid not in users_by_id]
+    if missing:
+        raise TaskServiceError(
+            "bad_request",
+            "Một hoặc nhiều người được chọn không phải là thành viên hợp lệ của dự án.",
+        )
+    return [users_by_id[uid] for uid in user_ids]
+
+
+def move_task(
+    db: Session,
+    *,
+    task_id: uuid.UUID,
+    current_user: User,
+    payload: MoveTaskRequest,
+    client_ip: str | None = None,
+) -> TaskResponse:
+    """
+    Di chuyển công việc sang cột trạng thái mới (kéo-thả trên Kanban hoặc đổi trong Drawer).
+
+    Input (Đầu vào):
+        - db (Session): Phiên kết nối cơ sở dữ liệu.
+        - task_id (UUID): Định danh công việc cần di chuyển.
+        - current_user (User): Người dùng đang thực hiện thao tác.
+        - payload (MoveTaskRequest): Trạng thái đích `status`, `position` và tùy chọn `reviewerId`, các thuộc tính công việc.
+        - client_ip (str | None): Địa chỉ IP của client để ghi nhận ActivityLog.
+
+    Output (Đầu ra):
+        - TaskResponse: Thông tin công việc sau khi cập nhật trạng thái, vị trí và `completedAt`.
+        - Raise TaskServiceError ('not_found', 'forbidden', 'bad_request') nếu vi phạm quyền hoặc điều kiện nghiệp vụ.
+    """
+    task = (
+        db.query(Task)
+        .options(
+            joinedload(Task.assignee_links).joinedload(TaskAssignee.user),
+            joinedload(Task.reviewer),
+            joinedload(Task.status),
+        )
+        .filter(Task.id == task_id, Task.deleted_at.is_(None))
+        .first()
+    )
+    if not task:
+        raise TaskServiceError(
+            "not_found", "Không tìm thấy công việc hoặc công việc đã bị xóa."
+        )
+
+    project = check_task_manage_permission(db, task.project_id, current_user.id)
+
+    status_obj = (
+        db.query(Status)
+        .filter(
+            Status.project_id == task.project_id,
+            Status.code == payload.status,
+        )
+        .first()
+    )
+    if not status_obj:
+        raise TaskServiceError(
+            "bad_request",
+            f"Trạng thái '{payload.status}' không tồn tại trong dự án này.",
+        )
+
+    if status_obj.id != task.status_id and status_obj.wip_limit is not None:
+        current_count = (
+            db.query(func.count(Task.id))
+            .filter(
+                Task.project_id == task.project_id,
+                Task.status_id == status_obj.id,
+                Task.deleted_at.is_(None),
+                Task.id != task.id,
+            )
+            .scalar()
+            or 0
+        )
+        if current_count >= status_obj.wip_limit:
+            raise TaskServiceError(
+                "bad_request",
+                f"Cột '{status_obj.name}' đã đạt giới hạn công việc tối đa ({status_obj.wip_limit}).",
+            )
+
+    if payload.reviewerId is not None:
+        reviewer_user = _resolve_project_member_users(
+            db, task.project_id, [payload.reviewerId]
+        )[0]
+        task.reviewer_id = reviewer_user.id
+        task.reviewer = reviewer_user
+
+    if payload.description is not None:
+        cleaned_desc = payload.description.strip()
+        if not cleaned_desc:
+            raise TaskServiceError(
+                "bad_request", "Mô tả công việc không được để trống."
+            )
+        task.description = cleaned_desc
+
+    if payload.priority is not None:
+        task.priority = payload.priority
+
+    if payload.startDate is not None:
+        task.start_date = payload.startDate
+    if payload.endDate is not None:
+        task.end_date = payload.endDate
+    if task.end_date < task.start_date:
+        raise TaskServiceError(
+            "bad_request", "Ngày kết thúc không được trước ngày bắt đầu."
+        )
+
+    if payload.overdueReason is not None:
+        task.overdue_reason = payload.overdueReason.strip() or None
+
+    if payload.acceptanceResult is not None:
+        task.acceptance_result = payload.acceptanceResult.strip() or None
+
+    if payload.assigneeIds is not None:
+        assignee_users = _resolve_project_member_users(
+            db, task.project_id, payload.assigneeIds
+        )
+        task.assignee_links.clear()
+        db.flush()
+        for assignee in assignee_users:
+            link = TaskAssignee(
+                task_id=task.id,
+                project_id=task.project_id,
+                user_id=assignee.id,
+            )
+            link.user = assignee
+            task.assignee_links.append(link)
+
+    if status_obj.code == "review" and task.reviewer_id is None:
+        raise TaskServiceError(
+            "bad_request",
+            "Cần chọn người duyệt trước khi chuyển sang trạng thái Đang duyệt.",
+        )
+
+    old_status_code = task.status.code if task.status else None
+    now = datetime.now(timezone.utc)
+
+    if status_obj.id != task.status_id:
+        task.position = _compute_end_task_position(
+            db, task.project_id, status_obj.id, exclude_task_id=task.id
+        )
+        task.status_id = status_obj.id
+        task.status = status_obj
+
+    if status_obj.category == "done":
+        if task.completed_at is None:
+            task.completed_at = now
+    else:
+        task.completed_at = None
+
+    task_key = f"{project.key.upper()}-{task.number}"
+    log_entry = ActivityLog(
+        project_id=task.project_id,
+        actor_id=current_user.id,
+        entity_type="task",
+        entity_id=task.id,
+        action="updated",
+        description=f"Đã chuyển công việc {task_key} sang trạng thái {status_obj.name}",
+        changes={
+            "key": task_key,
+            "fromStatus": old_status_code,
+            "toStatus": status_obj.code,
+            "reviewerId": str(task.reviewer_id) if task.reviewer_id else None,
+        },
+        ip_address=sanitize_ip(client_ip),
+    )
+    db.add(log_entry)
+
+    db.commit()
+    db.refresh(task)
+
+    return task_to_response(
+        task,
+        project_key=project.key,
+        status_code=status_obj.code,
+    )
+
+
+def set_task_reviewer(
+    db: Session,
+    *,
+    task_id: uuid.UUID,
+    current_user: User,
+    payload: SetReviewerRequest,
+    client_ip: str | None = None,
+) -> TaskResponse:
+    """
+    Cập nhật người duyệt (reviewer) cho công việc.
+
+    Input (Đầu vào):
+        - db (Session): Phiên kết nối cơ sở dữ liệu.
+        - task_id (UUID): Định danh công việc cần cập nhật người duyệt.
+        - current_user (User): Người dùng đang thực hiện thao tác.
+        - payload (SetReviewerRequest): Chứa `reviewerId` (UUID của thành viên duyệt).
+        - client_ip (str | None): Địa chỉ IP của client để ghi nhận ActivityLog.
+
+    Output (Đầu ra):
+        - TaskResponse: Đối tượng công việc đã cập nhật thông tin `reviewer`.
+        - Raise TaskServiceError ('not_found', 'forbidden', 'bad_request') nếu không hợp lệ.
+    """
+    task = (
+        db.query(Task)
+        .options(
+            joinedload(Task.assignee_links).joinedload(TaskAssignee.user),
+            joinedload(Task.reviewer),
+            joinedload(Task.status),
+        )
+        .filter(Task.id == task_id, Task.deleted_at.is_(None))
+        .first()
+    )
+    if not task:
+        raise TaskServiceError(
+            "not_found", "Không tìm thấy công việc hoặc công việc đã bị xóa."
+        )
+
+    project = check_task_manage_permission(db, task.project_id, current_user.id)
+    reviewer_user = _resolve_project_member_users(
+        db, task.project_id, [payload.reviewerId]
+    )[0]
+    task.reviewer_id = reviewer_user.id
+    task.reviewer = reviewer_user
+
+    task_key = f"{project.key.upper()}-{task.number}"
+    db.add(
+        ActivityLog(
+            project_id=task.project_id,
+            actor_id=current_user.id,
+            entity_type="task",
+            entity_id=task.id,
+            action="updated",
+            description=f"Đã cập nhật người duyệt cho công việc {task_key}: {reviewer_user.full_name}",
+            changes={
+                "key": task_key,
+                "reviewerId": str(reviewer_user.id),
+            },
+            ip_address=sanitize_ip(client_ip),
+        )
+    )
+
+    db.commit()
+    db.refresh(task)
+    return task_to_response(task, project_key=project.key)
+
+
+def update_task_properties(
+    db: Session,
+    *,
+    task_id: uuid.UUID,
+    current_user: User,
+    payload: UpdateTaskPropertiesRequest,
+    client_ip: str | None = None,
+) -> TaskResponse:
+    """
+    Cập nhật các thuộc tính chi tiết của công việc trong TaskDrawer.
+
+    Input (Đầu vào):
+        - db (Session): Phiên kết nối cơ sở dữ liệu.
+        - task_id (UUID): Định danh công việc cần cập nhật thuộc tính.
+        - current_user (User): Người dùng đang thực hiện thao tác.
+        - payload (UpdateTaskPropertiesRequest): Thông tin thuộc tính (`description`, `priority`, `assigneeIds`, `startDate`, `endDate`, `overdueReason`, `acceptanceResult`).
+        - client_ip (str | None): Địa chỉ IP của client để ghi nhận ActivityLog.
+
+    Output (Đầu ra):
+        - TaskResponse: Đối tượng công việc sau khi cập nhật thuộc tính và danh sách người thực hiện.
+        - Raise TaskServiceError ('not_found', 'forbidden', 'bad_request') nếu không hợp lệ.
+    """
+    task = (
+        db.query(Task)
+        .options(
+            joinedload(Task.assignee_links).joinedload(TaskAssignee.user),
+            joinedload(Task.reviewer),
+            joinedload(Task.status),
+        )
+        .filter(Task.id == task_id, Task.deleted_at.is_(None))
+        .first()
+    )
+    if not task:
+        raise TaskServiceError(
+            "not_found", "Không tìm thấy công việc hoặc công việc đã bị xóa."
+        )
+
+    project = check_task_manage_permission(db, task.project_id, current_user.id)
+    assignee_users = _resolve_project_member_users(
+        db, task.project_id, payload.assigneeIds
+    )
+
+    task.description = payload.description
+    task.priority = payload.priority
+    task.start_date = payload.startDate
+    task.end_date = payload.endDate
+    task.overdue_reason = payload.overdueReason.strip() or None
+    task.acceptance_result = payload.acceptanceResult.strip() or None
+
+    task.assignee_links.clear()
+    db.flush()
+    for assignee in assignee_users:
+        link = TaskAssignee(
+            task_id=task.id,
+            project_id=task.project_id,
+            user_id=assignee.id,
+        )
+        link.user = assignee
+        task.assignee_links.append(link)
+
+    task_key = f"{project.key.upper()}-{task.number}"
+    db.add(
+        ActivityLog(
+            project_id=task.project_id,
+            actor_id=current_user.id,
+            entity_type="task",
+            entity_id=task.id,
+            action="updated",
+            description=f"Đã cập nhật thuộc tính công việc {task_key}",
+            changes={
+                "key": task_key,
+                "priority": task.priority,
+                "startDate": task.start_date.isoformat(),
+                "endDate": task.end_date.isoformat(),
+                "assigneeIds": [str(u.id) for u in assignee_users],
+                "overdueReason": task.overdue_reason,
+                "acceptanceResult": task.acceptance_result,
+            },
+            ip_address=sanitize_ip(client_ip),
+        )
+    )
+
+    db.commit()
+    db.refresh(task)
+    return task_to_response(task, project_key=project.key)

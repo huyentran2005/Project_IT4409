@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { CreateTaskInput, TaskPriority, TaskType, UserSummary } from '../../types/task'
+import type { CreateTaskInput, TaskPriority, TaskStatus, TaskType, UserSummary } from '../../types/task'
 import { Avatar } from '../ui/Avatar'
 import { Icon } from '../ui/Icon'
 
@@ -11,11 +11,12 @@ const toDateInput = (date: Date) => {
 interface CreateTaskModalProps {
   projectName: string
   members: UserSummary[]
+  initialStatus?: TaskStatus
   onClose: () => void
   onCreate: (input: CreateTaskInput) => Promise<void> | void
 }
 
-export function CreateTaskModal({ projectName, members, onClose, onCreate }: CreateTaskModalProps) {
+export function CreateTaskModal({ projectName, members, initialStatus = 'backlog', onClose, onCreate }: CreateTaskModalProps) {
   const today = new Date()
   const nextWeek = new Date(today)
   nextWeek.setDate(today.getDate() + 7)
@@ -23,6 +24,7 @@ export function CreateTaskModal({ projectName, members, onClose, onCreate }: Cre
   const [description, setDescription] = useState('')
   const [type, setType] = useState<TaskType>('task')
   const [priority, setPriority] = useState<TaskPriority>('medium')
+  const [status, setStatus] = useState<TaskStatus>(initialStatus)
   const [assigneeIds, setAssigneeIds] = useState<string[]>([])
   const [assigneeOpen, setAssigneeOpen] = useState(false)
   const [assigneeQuery, setAssigneeQuery] = useState('')
@@ -63,7 +65,7 @@ export function CreateTaskModal({ projectName, members, onClose, onCreate }: Cre
     setError('')
     setSubmitting(true)
     try {
-      await onCreate({ title: title.trim(), description: description.trim(), type, priority, assigneeIds, startDate, endDate })
+      await onCreate({ title: title.trim(), description: description.trim(), type, priority, status, assigneeIds, startDate, endDate })
       onClose()
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Không thể tạo công việc. Vui lòng thử lại.')
@@ -78,7 +80,7 @@ export function CreateTaskModal({ projectName, members, onClose, onCreate }: Cre
         <div className="create-modal__header"><div><span>{projectName.toUpperCase()}</span><h2>Tạo công việc mới</h2></div><button type="button" className="icon-button" onClick={onClose}><Icon name="close" /></button></div>
         <label>Tiêu đề công việc<input autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ví dụ: Hoàn thiện trang đăng nhập" /></label>
         <label className="task-description-field">Mô tả<textarea required value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Mục tiêu, yêu cầu và kết quả mong đợi của công việc" /></label>
-        <div className="create-modal__fields"><label>Loại<select value={type} onChange={(event) => setType(event.target.value as TaskType)}><option value="task">Task</option><option value="story">Story</option><option value="bug">Bug</option><option value="epic">Epic</option></select></label><label>Ưu tiên<select value={priority} onChange={(event) => setPriority(event.target.value as TaskPriority)}><option value="medium">Trung bình</option><option value="high">Cao</option><option value="urgent">Khẩn cấp</option><option value="low">Thấp</option></select></label></div>
+        <div className="create-modal__fields create-modal__fields--three"><label>Loại<select value={type} onChange={(event) => setType(event.target.value as TaskType)}><option value="task">Task</option><option value="story">Story</option><option value="bug">Bug</option><option value="epic">Epic</option></select></label><label>Ưu tiên<select value={priority} onChange={(event) => setPriority(event.target.value as TaskPriority)}><option value="medium">Trung bình</option><option value="high">Cao</option><option value="urgent">Khẩn cấp</option><option value="low">Thấp</option></select></label><label>Trạng thái<select value={status} onChange={(event) => setStatus(event.target.value as TaskStatus)}><option value="backlog">Cần làm</option><option value="in-progress">Đang làm</option><option value="review">Đang duyệt</option><option value="done">Hoàn thành</option></select></label></div>
         <fieldset className="assignee-picker" ref={assigneePickerRef}>
           <legend>Người thực hiện <span>(có thể chọn nhiều người)</span></legend>
           <div className="assignee-picker__control">

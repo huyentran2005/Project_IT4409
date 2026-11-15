@@ -73,7 +73,7 @@ export function TaskDrawer({ task, members, reviewRequested, overdueReasonRequir
   }
   const deleteTask = () => {
     setMenuOpen(false)
-    if (window.confirm(`Xóa công việc “${task.title}”? Hành động này không thể hoàn tác.`)) onDelete()
+    onDelete()
   }
 
   const submitTime = (event: React.FormEvent) => {
