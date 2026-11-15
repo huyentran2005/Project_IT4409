@@ -57,6 +57,11 @@ export const projectApi = {
   getDocuments(projectId: string) {
     return apiRequest<ProjectDocument[]>(`/api/projects/${projectId}/documents`)
   },
+  reprocessDocument(projectId: string, documentId: string) {
+    return apiRequest<ProjectDocument>(`/api/projects/${projectId}/documents/${documentId}/process`, {
+      method: 'POST',
+    })
+  },
   getActivityLogs(projectId: string) {
     return apiRequest<ActivityLog[]>(`/api/projects/${projectId}/activity-logs`)
   },

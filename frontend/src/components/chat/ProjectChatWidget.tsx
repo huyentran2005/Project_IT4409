@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { projectChatApi, type ProjectChatMessage, type ProjectChatSessionSummary } from '../../services/projectChatApi'
 import { Icon } from '../ui/Icon'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 interface ProjectChatWidgetProps {
   projectId: string
@@ -10,6 +12,14 @@ interface ProjectChatWidgetProps {
 const formatSessionDate = (value: string) => new Intl.DateTimeFormat('vi-VN', {
   day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
 }).format(new Date(value))
+
+const formatAnswer = (content: string) => content
+  .replace(/\\?\$\\+rightarrow\\?\$/g, '→')
+  .replace(/\\?\$\\+leftarrow\\?\$/g, '←')
+  .replace(/\\?\$\\+leftrightarrow\\?\$/g, '↔')
+  .replace(/\\+rightarrow/g, '→')
+  .replace(/\\+leftarrow/g, '←')
+  .replace(/\\+leftrightarrow/g, '↔')
 
 export function ProjectChatWidget({ projectId, projectName }: ProjectChatWidgetProps) {
   const [open, setOpen] = useState(false)
@@ -177,7 +187,11 @@ export function ProjectChatWidget({ projectId, projectName }: ProjectChatWidgetP
               {loadingHistory && <p className="project-chat__loading">Đang tải lịch sử...</p>}
               {messages.map((message) => (
                 <article className={`project-chat__message project-chat__message--${message.role}`} key={message.id}>
-                  <div className="project-chat__bubble">{message.content}</div>
+                  <div className={`project-chat__bubble${message.role === 'assistant' ? ' project-chat__bubble--markdown' : ''}`}>
+                    {message.role === 'assistant'
+                      ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{formatAnswer(message.content)}</ReactMarkdown>
+                      : message.content}
+                  </div>
                   {message.role === 'assistant' && message.sources.length > 0 && (
                     <div className="project-chat__sources">
                       <small>Nguồn trong dự án</small>

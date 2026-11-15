@@ -218,18 +218,6 @@ function App() {
     setPendingTaskMove(null)
     setSelectedTask(task)
   }
-  const openNotification = async (notification: AppNotification) => {
-    if (!notification.taskId || !notification.projectId) return
-    await taskApi.getTask(notification.taskId)
-    const nextBoard = await loadProject(notification.projectId)
-    const task = nextBoard.columns.flatMap((column) => column.tasks).find((item) => item.id === notification.taskId)
-    if (!task) throw new Error('Công việc không còn tồn tại hoặc bạn không có quyền truy cập.')
-    setQuery('')
-    setFilter('all')
-    setActiveSection('Dự án')
-    setPendingTaskMove(null)
-    setSelectedTask(task)
-  }
   const openTask = (task: Task) => {
     if (task.projectId && task.projectId !== board.project.id) {
       selectProject(task.projectId)

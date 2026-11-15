@@ -18,6 +18,7 @@ CREATE INDEX ix_task_labels_label ON task_labels (label_id, task_id);
 CREATE INDEX ix_comments_task_created ON comments (task_id, created_at) WHERE deleted_at IS NULL;
 CREATE INDEX ix_time_entries_task_started ON time_entries (task_id, started_at DESC);
 CREATE INDEX ix_time_entries_user_started ON time_entries (user_id, started_at DESC);
+CREATE INDEX ix_time_entries_project_user_started ON time_entries (project_id, user_id, started_at DESC);
 CREATE INDEX ix_task_watchers_user ON task_watchers (user_id, task_id);
 CREATE INDEX ix_project_documents_project ON project_documents (project_id, updated_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX ix_meetings_project_start ON meetings (project_id, starts_at) WHERE cancelled_at IS NULL;

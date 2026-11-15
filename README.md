@@ -261,7 +261,7 @@ lệnh dưới đây trong **cùng một cửa sổ terminal**:
 $env:DATABASE_URL="postgresql+psycopg://task_user:task_password@localhost:5433/task_db"
 $env:MINIO_ENDPOINT="localhost:9000"
 $env:QDRANT_URL="http://localhost:6333"
-$env:CELERY_BROKER_URL="redis://localhost:6379/0"
+$env:CELERY_BROKER_URL="redis://localhost:6381/0"
 uvicorn app.main:app --app-dir backend --reload --port 8000
 ```
 

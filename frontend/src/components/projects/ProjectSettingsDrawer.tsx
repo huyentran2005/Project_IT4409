@@ -69,7 +69,8 @@ export function ProjectSettingsDrawer({ project, documents, onMembersChange, onU
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null)
   const [cancellingInvitationId, setCancellingInvitationId] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
-  const [uploading, setUploading] = useState(false)
+  const [uploadingCount, setUploadingCount] = useState(0)
+  const [retryingDocumentId, setRetryingDocumentId] = useState<string | null>(null)
   const [documentError, setDocumentError] = useState('')
   const currentUserId = (() => {
     try { return JSON.parse(localStorage.getItem('taskflow-current-user') ?? 'null')?.id as string | undefined } catch { return undefined }
@@ -140,22 +141,35 @@ export function ProjectSettingsDrawer({ project, documents, onMembersChange, onU
     }
   }
 
-  const upload = async (file?: File) => {
-    if (!file) return
+  const upload = async (files?: File[]) => {
+    if (!files?.length) return
     setDocumentError('')
-    setUploading(true)
-    try {
-      await onUpload(file)
-    } catch (reason) {
-      setDocumentError(reason instanceof Error ? reason.message : 'Không thể tải tệp lên.')
-    } finally {
-      setUploading(false)
-      if (fileInput.current) fileInput.current.value = '' // cho phép chọn lại cùng một tệp
-    }
+    setUploadingCount((count) => count + files.length)
+    await Promise.all(files.map(async (file) => {
+      try {
+        await onUpload(file)
+      } catch (reason) {
+        const message = reason instanceof Error ? reason.message : 'Không thể tải tệp lên.'
+        setDocumentError((current) => [current, `${file.name}: ${message}`].filter(Boolean).join(' · '))
+      } finally {
+        setUploadingCount((count) => Math.max(0, count - 1))
+      }
+    }))
   }
   const download = async (document: ProjectDocument) => {
     setDocumentError('')
     try { await onDownload?.(document) } catch (reason) { setDocumentError(reason instanceof Error ? reason.message : 'Không thể tải tệp xuống.') }
+  }
+  const retryProcessing = async (document: ProjectDocument) => {
+    setDocumentError('')
+    setRetryingDocumentId(document.id)
+    try {
+      await projectApi.reprocessDocument(project.id, document.id)
+    } catch (reason) {
+      setDocumentError(`${document.name}: ${reason instanceof Error ? reason.message : 'Không thể đưa tệp vào hàng đợi.'}`)
+    } finally {
+      setRetryingDocumentId(null)
+    }
   }
 
   const changeMemberRole = async (memberId: string, role: ProjectRole) => {
@@ -296,12 +310,12 @@ export function ProjectSettingsDrawer({ project, documents, onMembersChange, onU
 
           {activeTab === 'documents' && (
             <section>
-              <div className="settings-section-title"><div><h2>Tài liệu dự án</h2><p>Tài liệu dùng chung cho các thành viên</p></div><button className="primary-button" disabled={!canManageDocuments || uploading} title={canManageDocuments ? 'Tải tài liệu lên' : 'Bạn không có quyền quản lý tài liệu'} onClick={() => fileInput.current?.click()}><Icon name="upload" size={15} />{uploading ? 'Đang tải lên...' : 'Tải lên'}</button><input ref={fileInput} type="file" hidden onChange={(event) => upload(event.target.files?.[0])} /></div>
+              <div className="settings-section-title"><div><h2>Tài liệu dự án</h2><p>Tài liệu dùng chung cho các thành viên</p></div><button className="primary-button" disabled={!canManageDocuments} title={canManageDocuments ? 'Tải tài liệu lên' : 'Bạn không có quyền quản lý tài liệu'} onClick={() => fileInput.current?.click()}><Icon name="upload" size={15} />{uploadingCount > 0 ? `Đang tải ${uploadingCount} tệp...` : 'Tải lên'}</button><input ref={fileInput} type="file" multiple hidden onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ''; void upload(files) }} /></div>
               {documentError && <p className="auth-error" role="alert">{documentError}</p>}
               <div className="document-list">
                {documents.map((document) => {
                  const processingLabels = { uploaded: 'Đã tải lên', queued: 'Đang chờ xử lý', processing: 'Đang xử lý', completed: 'Đã xử lý', failed: 'Xử lý lỗi', unsupported: 'Chưa hỗ trợ xử lý' }
-                 return <div className="document-row" key={document.id}><span className="document-icon"><Icon name="file" size={18} /></span><div><strong>{document.name}</strong><span>{document.type} · {document.size} · {document.updatedBy} · {processingLabels[document.processingStatus]}{document.processingError && <> · {document.processingError}</>}{onDownload && <> · <button type="button" onClick={() => void download(document)}>Tải xuống</button></>}</span></div><time>{new Intl.DateTimeFormat('vi-VN').format(new Date(document.updatedAt))}</time></div>
+                 return <div className="document-row" key={document.id}><span className="document-icon"><Icon name="file" size={18} /></span><div><strong>{document.name}</strong><span>{document.type} · {document.size} · {document.updatedBy} · {processingLabels[document.processingStatus]}{document.processingError && <> · {document.processingError}</>}{document.processingStatus === 'failed' && canManageDocuments && <> · <button type="button" disabled={retryingDocumentId === document.id} onClick={() => void retryProcessing(document)}>{retryingDocumentId === document.id ? 'Đang gửi lại...' : 'Thử xử lý lại'}</button></>}{onDownload && <> · <button type="button" onClick={() => void download(document)}>Tải xuống</button></>}</span></div><time>{new Intl.DateTimeFormat('vi-VN').format(new Date(document.updatedAt))}</time></div>
                }
                )}
               </div>

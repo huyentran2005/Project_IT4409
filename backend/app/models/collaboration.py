@@ -36,7 +36,7 @@ class TimeEntry(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     ended_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # Thêm bởi migration 004
+    # Giờ làm thêm, không tính vào cảnh báo quá 8h/ngày.
     is_overtime: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     user = relationship("User", lazy="joined")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

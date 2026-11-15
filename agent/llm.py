@@ -99,7 +99,10 @@ def build_prompt(
     return (
         "Bạn là trợ lý hỏi đáp tài liệu. Chỉ dùng NGỮ CẢNH dưới đây; nếu thiếu dữ liệu hãy nói rõ. "
         "Lịch sử chỉ giúp hiểu câu hỏi tiếp nối; mọi kết luận phải được hỗ trợ bởi NGỮ CẢNH hiện tại. "
-        "Trả lời tiếng Việt ngắn gọn, có gạch đầu dòng khi phù hợp và trích nguồn dạng [1], [2].\n\n"
+        "Trả lời tiếng Việt ngắn gọn, bỏ câu mở đầu rườm rà. Dùng Markdown chuẩn: tiêu đề, đoạn văn, "
+        "danh sách gạch đầu dòng và chữ đậm khi phù hợp; mỗi ý chính nằm trên một dòng. Trích nguồn dạng [1], [2]. "
+        "Dùng ký tự mũi tên Unicode (→, ←, ↔), không viết mũi tên bằng LaTeX hoặc ký hiệu $. "
+        "Không escape các ký hiệu Markdown và không bọc toàn bộ câu trả lời trong code block.\n\n"
         f"{conversation}CÂU HỎI: {question}\n\n{breakdown}NGỮ CẢNH:\n{evidence}"
     )
 

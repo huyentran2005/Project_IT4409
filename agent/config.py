@@ -22,6 +22,9 @@ class Settings:
     embedding_model: str = os.getenv(
         "OPENROUTER_EMBEDDING_MODEL", "nvidia/nemotron-3.5-embed-8b:free"
     )
+    rerank_model: str = os.getenv(
+        "OPENROUTER_RERANK_MODEL", "nvidia/nemotron-3.5-rerank-8b:free"
+    )
     llm_provider: str = os.getenv("LLM_PROVIDER", "gemini").lower()
 
 

@@ -78,6 +78,7 @@ CREATE TABLE time_entries (
     minutes integer GENERATED ALWAYS AS
         (floor(extract(epoch FROM (ended_at - started_at)) / 60)::integer) STORED,
     note text,
+    is_overtime boolean NOT NULL DEFAULT false,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     FOREIGN KEY (task_id, project_id)

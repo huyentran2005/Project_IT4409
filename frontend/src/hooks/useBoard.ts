@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { projectApi } from '../services/projectApi'
 import { taskApi } from '../services/taskApi'
-import type { ProjectMember } from '../types/project'
 import { getTaskAssignees, type BoardData, type BoardFilter, type CreateProjectInput, type CreateTaskInput, type ProjectSummary, type Task, type TaskComment, type TaskPropertiesUpdate, type TaskStatus, type TimesheetEntry, type TimesheetInput, type UserSummary } from '../types/task'
 import { getStoredUser } from '../utils/session'
 
@@ -27,15 +26,6 @@ function getActiveUser(): UserSummary {
   return getStoredUser()
 }
 
-const memberToUserSummary = (member: ProjectMember): UserSummary => ({
-  id: member.id,
-  name: member.name,
-  email: member.email,
-  avatarUrl: member.avatarUrl ?? undefined,
-  initials: member.initials,
-  color: member.color,
-})
-
 export function useBoard(projectId = 'p-01', authenticated = true) {
   const [board, setBoard] = useState<BoardData>(emptyBoard)
   const [projects, setProjects] = useState<ProjectSummary[]>([])
@@ -47,52 +37,52 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
 
   useEffect(() => {
     if (!authenticated || !localStorage.getItem('taskflow-token')) return
-    Promise.allSettled([
-      projectApi.listProjects(),
-      taskApi.getAllTasks(),
-      taskApi.getBoard(projectId),
-      projectApi.getMembers(projectId),
-    ])
-      .then(([projectsResult, allTasksResult, boardResult, membersResult]) => {
-        const fetchedProjects = projectsResult.status === 'fulfilled'
-          ? projectsResult.value
-          : []
-        if (allTasksResult.status === 'fulfilled') {
-          setAllTasks(allTasksResult.value)
-        }
-        if (boardResult.status !== 'fulfilled') {
-          setBoard({
-            ...emptyBoard,
-            project: { ...emptyBoard.project, id: '', name: 'Chưa có dự án' },
-          })
-          setProjects(fetchedProjects)
-          return
-        }
-        const nextBoard = boardResult.value
-        const members = membersResult.status === 'fulfilled'
-          ? membersResult.value.map(memberToUserSummary)
-          : nextBoard.project.members
+    let active = true
+    setLoading(true)
+
+    projectApi.listProjects()
+      .then((fetchedProjects) => {
+        if (!active) return
+        const loadedProject = boardCache.current[projectId]?.project
+        const mergedProjects = fetchedProjects.map((item) =>
+          item.id === projectId && loadedProject ? loadedProject : item,
+        )
+        setProjects(
+          loadedProject && !mergedProjects.some((item) => item.id === projectId)
+            ? [loadedProject, ...mergedProjects]
+            : mergedProjects,
+        )
+      })
+      .catch(() => {})
+
+    taskApi.getAllTasks()
+      .then((tasks) => { if (active) setAllTasks(tasks) })
+      .catch(() => {})
+
+    taskApi.getBoard(projectId)
+      .then((nextBoard) => {
+        if (!active) return
         const columns = nextBoard.columns.length > 0
           ? nextBoard.columns
           : emptyBoard.columns.map((column) => ({ ...column, tasks: [] }))
-        const loadedBoard = {
-          ...nextBoard,
-          project: { ...nextBoard.project, members },
-          columns,
-        }
-
+        const loadedBoard = { ...nextBoard, columns }
         boardCache.current[loadedBoard.project.id] = loadedBoard
         setBoard(loadedBoard)
-        if (fetchedProjects.length > 0) {
-          setProjects(fetchedProjects.map((item) => item.id === loadedBoard.project.id ? loadedBoard.project : item))
-        } else {
-          setProjects((current) => {
-            const withoutCurrent = current.filter((item) => item.id !== loadedBoard.project.id)
-            return [loadedBoard.project, ...withoutCurrent]
-          })
-        }
+        setProjects((current) => [
+          loadedBoard.project,
+          ...current.filter((item) => item.id !== loadedBoard.project.id),
+        ])
       })
-      .finally(() => setLoading(false))
+      .catch(() => {
+        if (!active) return
+        setBoard({
+          ...emptyBoard,
+          project: { ...emptyBoard.project, id: '', name: 'Chưa có dự án' },
+        })
+      })
+      .finally(() => { if (active) setLoading(false) })
+
+    return () => { active = false }
   }, [projectId, authenticated])
 
   const withCalculatedProgress = (nextBoard: BoardData): BoardData => {
