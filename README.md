@@ -67,8 +67,15 @@ Các lần sau Docker sẽ sử dụng cache nên nhanh hơn.
 docker compose ps
 ```
 
-Các service `db`, `minio`, `backend` và `frontend` phải ở trạng thái `Up`.
-PostgreSQL và MinIO sẽ hiển thị thêm trạng thái `healthy`.
+Các service `db`, `minio`, `qdrant`, `redis`, `document-worker`, `backend` và
+`frontend` phải ở trạng thái `Up`. PostgreSQL, MinIO và Redis sẽ hiển thị thêm
+trạng thái `healthy`.
+
+Sau lần chạy đầu tiên hoặc sau khi xóa volume database, khởi tạo schema trực tiếp:
+
+```powershell
+docker compose exec -T db sh -lc 'until pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do sleep 2; done; psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /database/schema.sql'
+```
 
 Nếu service không khởi động, xem log bằng:
 
@@ -94,7 +101,7 @@ Với cấu hình mặc định, thông tin đăng nhập là `minioadmin` /
 | Swagger UI | http://localhost:8000/docs |
 | Health check | http://localhost:8000/health |
 | MinIO Console | http://localhost:9001 |
-| PostgreSQL | `localhost:5432` |
+| PostgreSQL | `localhost:5433` |
 
 Backend và frontend tự động reload khi sửa source code. Nếu thay đổi dependency
 trong `requirements.txt` hoặc `package.json`, build lại image bằng:
@@ -163,8 +170,8 @@ pip install -r backend\requirements.txt
 # Frontend
 npm --prefix frontend ci
 
-# PostgreSQL và MinIO
-docker compose up -d db minio
+# PostgreSQL, MinIO, Qdrant, Redis và Celery worker
+docker compose up -d --build db minio qdrant redis document-worker
 ```
 
 File `.env` trên máy không tự cập nhật theo `.env.example`. Khi `.env.example`
@@ -197,7 +204,7 @@ Tạo kết nối PostgreSQL với các thông tin:
 | Trường | Giá trị |
 | --- | --- |
 | Host | `localhost` |
-| Port | `5432` |
+| Port | `5433` |
 | Database | Giá trị `POSTGRES_DB` trong `.env` |
 | Username | Giá trị `POSTGRES_USER` trong `.env` |
 | Password | Giá trị `POSTGRES_PASSWORD` trong `.env` |
@@ -206,9 +213,9 @@ Tạo kết nối PostgreSQL với các thông tin:
 
 ## Lựa chọn 2: Chạy frontend và backend trực tiếp trên máy
 
-Chỉ dùng cách này khi cần chạy frontend/backend ngoài Docker để phát triển.
-Docker Desktop vẫn cần thiết để chạy PostgreSQL và MinIO. Không thực hiện đồng
-thời các bước khởi động frontend/backend ở Lựa chọn 1.
+Chạy frontend/backend ngoài Docker; PostgreSQL, MinIO, Qdrant, Redis và Celery
+worker vẫn chạy trong Docker. Không khởi động service `backend`/`frontend` của
+Compose trong option này.
 
 ### Bước 1: Tạo môi trường ảo cho backend
 
@@ -238,7 +245,7 @@ source .venv/Scripts/activate  # Git Bash trên Windows
 ### Bước 2: Khởi động PostgreSQL và MinIO
 
 ```bash
-docker compose up -d db minio
+docker compose up -d --build db minio qdrant redis document-worker
 ```
 
 ### Bước 3: Khởi động backend
@@ -251,8 +258,10 @@ lệnh dưới đây trong **cùng một cửa sổ terminal**:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
-$env:DATABASE_URL="postgresql+psycopg://task_user:task_password@localhost:5432/task_db"
+$env:DATABASE_URL="postgresql+psycopg://task_user:task_password@localhost:5433/task_db"
 $env:MINIO_ENDPOINT="localhost:9000"
+$env:QDRANT_URL="http://localhost:6333"
+$env:CELERY_BROKER_URL="redis://localhost:6379/0"
 uvicorn app.main:app --app-dir backend --reload --port 8000
 ```
 
@@ -262,6 +271,8 @@ PowerShell hiện tại; chúng không sửa file `.env`. Có thể xem lại gi
 ```powershell
 $env:DATABASE_URL
 $env:MINIO_ENDPOINT
+$env:QDRANT_URL
+$env:CELERY_BROKER_URL
 ```
 
 Giữ terminal này mở trong lúc backend chạy. Sau đó truy cập:
@@ -272,7 +283,8 @@ Giữ terminal này mở trong lúc backend chạy. Sau đó truy cập:
 
 ### Bước 4: Xem dữ liệu PostgreSQL và file MinIO
 
-Backend chạy local nhưng PostgreSQL và MinIO vẫn chạy trong Docker.
+Backend và frontend chạy local; PostgreSQL, MinIO, Qdrant, Redis và Celery worker
+vẫn chạy trong Docker.
 
 Để xem chi tiết database bằng dòng lệnh:
 
@@ -294,7 +306,7 @@ Nếu muốn giao diện trực quan, dùng DBeaver hoặc pgAdmin với cấu h
 | Trường | Giá trị mặc định |
 | --- | --- |
 | Host | `localhost` |
-| Port | `5432` |
+| Port | `5433` |
 | Database | `task_db` |
 | Username | `task_user` |
 | Password | `task_password` |
@@ -449,7 +461,7 @@ Project_IT4409/
 
 ### Port đã được sử dụng
 
-Kiểm tra các port `5173`, `8000`, `5432`, `9000` và `9001`, sau đó dừng chương trình/container đang chiếm port hoặc đổi port phía bên trái trong `compose.yaml`.
+Kiểm tra các port `5173`, `8000`, `5433`, `6379`, `6333`, `9000` và `9001`, sau đó dừng chương trình/container đang chiếm port hoặc đổi port phía bên trái trong `compose.yaml`.
 
 ### Container không nhận cấu hình `.env` mới
 

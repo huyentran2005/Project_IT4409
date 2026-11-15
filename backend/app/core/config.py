@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Task Management API"
 
     # Database
-    DATABASE_URL: str = "postgresql+psycopg://task_user:task_password@db:5432/task_db"
+    DATABASE_URL: str = "postgresql+psycopg://task_user:task_password@localhost:5433/task_db"
 
     # Google SSO OAuth 2.0
     GOOGLE_CLIENT_ID: str = ""
@@ -25,12 +25,15 @@ class Settings(BaseSettings):
     GITHUB_REDIRECT_URI: str = "http://localhost:8000/api/auth/sso/github/callback"
 
     # MinIO (lưu tài liệu)
-    MINIO_ENDPOINT: str = "minio:9000"
+    MINIO_ENDPOINT: str = "localhost:9000"
     MINIO_ROOT_USER: str = "minioadmin"
     MINIO_ROOT_PASSWORD: str = "minioadmin_password"
     MINIO_BUCKET: str = "task-files"
     MINIO_SECURE: bool = False
     MAX_UPLOAD_MB: int = 25
+
+    # Document processing jobs
+    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
 
     # JWT Security
     JWT_SECRET_KEY: str = "taskflow_super_secret_jwt_key_it4409_2026"

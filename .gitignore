@@ -70,6 +70,7 @@ compose.override.yaml
 # Local persistent data (if bind-mounted)
 postgres_data/
 minio_data/
+qdrant_data/
 
 # ==========================================
 # IDE / Editor

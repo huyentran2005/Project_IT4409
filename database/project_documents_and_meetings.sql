@@ -1,5 +1,5 @@
 -- Tài liệu dự án và meeting.
--- Nguồn: docs/database-design.md. Chạy qua database/migrate.sql.
+-- Nguồn: docs/database-design.md. Được include bởi database/schema.sql.
 
 CREATE TABLE project_documents (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -10,6 +10,10 @@ CREATE TABLE project_documents (
     object_key text NOT NULL UNIQUE,
     mime_type varchar(150) NOT NULL,
     size_bytes bigint NOT NULL CHECK (size_bytes >= 0),
+    processing_status varchar(20) NOT NULL DEFAULT 'uploaded',
+    processing_error text,
+    processing_task_id varchar(36),
+    processed_object_key text,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     deleted_at timestamptz,

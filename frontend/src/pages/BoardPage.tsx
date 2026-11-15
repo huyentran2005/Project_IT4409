@@ -13,6 +13,7 @@ import { TaskListView } from '../components/views/TaskListView'
 import { SystemLogView } from '../components/views/SystemLogView'
 import { Avatar } from '../components/ui/Avatar'
 import { Icon } from '../components/ui/Icon'
+import { ProjectChatWidget } from '../components/chat/ProjectChatWidget'
 
 interface BoardPageProps {
   board: BoardData
@@ -48,6 +49,13 @@ export function BoardPage({ board, columns, filter, onFilter, onOpenTask, onMove
     meetingApi.list(board.project.id).then(setMeetings).catch(() => setMeetings([]))
     projectApi.getDocuments(board.project.id).then(setDocuments).catch(() => setDocuments([]))
   }, [board.project.id])
+  useEffect(() => {
+    if (!documents.some((document) => document.processingStatus === 'queued' || document.processingStatus === 'processing')) return
+    const timer = window.setInterval(() => {
+      projectApi.getDocuments(board.project.id).then(setDocuments).catch(() => undefined)
+    }, 2000)
+    return () => window.clearInterval(timer)
+  }, [board.project.id, documents])
   const uploadDocument = async (file: File) => {
     const created = await projectApi.uploadDocument(board.project.id, file)
     setDocuments((current) => [created, ...current])
@@ -88,6 +96,7 @@ export function BoardPage({ board, columns, filter, onFilter, onOpenTask, onMove
       {activeView === 'activity' && <SystemLogView projectId={board.project.id} />}
       {settingsOpen && <ProjectSettingsDrawer project={board.project} documents={documents} onMembersChange={onMembersChange} onUpload={uploadDocument} onDownload={(document) => projectApi.downloadDocument(board.project.id, document)} onClose={() => setSettingsOpen(false)} />}
       {meetingOpen && <CreateMeetingModal project={board.project} onClose={() => setMeetingOpen(false)} onCreate={createMeeting} />}
+      <ProjectChatWidget key={board.project.id} projectId={board.project.id} projectName={board.project.name} />
     </main>
   )
 }

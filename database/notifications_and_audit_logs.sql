@@ -1,5 +1,5 @@
 -- Thông báo và audit log.
--- Nguồn: docs/database-design.md. Chạy qua database/migrate.sql.
+-- Nguồn: docs/database-design.md. Được include bởi database/schema.sql.
 
 CREATE TABLE notifications (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -39,6 +39,8 @@ export interface ProjectDocument {
   size: string
   updatedAt: string
   updatedBy: string
+  processingStatus: 'uploaded' | 'queued' | 'processing' | 'completed' | 'failed' | 'unsupported'
+  processingError?: string | null
 }
 
 export interface ActivityLogChange {

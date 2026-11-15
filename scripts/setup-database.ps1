@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$DatabaseHost = 'localhost',
-    [ValidateRange(1, 65535)][int]$Port = 5432,
+    [ValidateRange(1, 65535)][int]$Port = 5433,
     [string]$AdminUser = 'postgres',
     [string]$PsqlPath = 'psql',
     [switch]$SchemaOnly
@@ -79,14 +79,14 @@ try {
 
     $env:PGPASSWORD = $databasePassword
     Write-Host "Applying schema to $databaseName as $databaseUser..."
-    & $PsqlPath @connectionArguments -U $databaseUser -d $databaseName -f (Join-Path $projectRoot 'database/migrate.sql')
-    if ($LASTEXITCODE -ne 0) { throw 'Schema migration failed; its transaction was rolled back.' }
+    & $PsqlPath @connectionArguments -U $databaseUser -d $databaseName -f (Join-Path $projectRoot 'database/schema.sql')
+    if ($LASTEXITCODE -ne 0) { throw 'Schema initialization failed; its transaction was rolled back.' }
 
     & $PsqlPath @connectionArguments -U $databaseUser -d $databaseName -c @'
 SELECT current_database() AS database, current_user AS owner,
        current_setting('TimeZone') AS timezone,
        (SELECT count(*) FROM pg_tables
-        WHERE schemaname = 'public' AND tablename <> 'schema_migrations') AS application_tables,
+        WHERE schemaname = 'public') AS application_tables,
        (SELECT count(*) FROM public.permissions) AS permissions;
 '@
     if ($LASTEXITCODE -ne 0) { throw 'Database verification failed.' }

@@ -1,5 +1,5 @@
 -- Tài khoản và dự án.
--- Nguồn: docs/database-design.md. Chạy qua database/migrate.sql.
+-- Nguồn: docs/database-design.md. Chạy qua database/schema.sql.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 

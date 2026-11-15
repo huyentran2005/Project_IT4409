@@ -1,5 +1,5 @@
 -- Tự động cập nhật updated_at.
--- Nguồn: docs/database-design.md. Chạy qua database/migrate.sql.
+-- Nguồn: docs/database-design.md. Được include bởi database/schema.sql.
 
 CREATE FUNCTION set_updated_at() RETURNS trigger
 LANGUAGE plpgsql AS $$
