@@ -12,6 +12,7 @@ from app.models.project_role import (
 from app.models.project_member import ProjectMember
 from app.models.project_invitation import ProjectInvitation
 from app.models.project_content import Meeting, MeetingAttendee, ProjectDocument
+from app.models.project_chat import ProjectChatMessage, ProjectChatSession
 from app.models.task import Task, TaskAssignee, ActivityLog
 
 __all__ = [
@@ -30,6 +31,8 @@ __all__ = [
     "Meeting",
     "MeetingAttendee",
     "ProjectDocument",
+    "ProjectChatSession",
+    "ProjectChatMessage",
     "Task",
     "TaskAssignee",
     "ActivityLog",

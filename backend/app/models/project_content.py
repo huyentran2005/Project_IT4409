@@ -51,6 +51,10 @@ class ProjectDocument(Base):
     object_key: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     mime_type: Mapped[str] = mapped_column(String(150), nullable=False)
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    processing_status: Mapped[str] = mapped_column(String(20), nullable=False, default="uploaded")
+    processing_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    processing_task_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    processed_object_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False

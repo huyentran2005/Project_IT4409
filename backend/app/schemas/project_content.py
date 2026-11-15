@@ -65,3 +65,5 @@ class DocumentOut(BaseModel):
     size: str
     updatedAt: str
     updatedBy: str
+    processingStatus: str = "uploaded"
+    processingError: str | None = None
