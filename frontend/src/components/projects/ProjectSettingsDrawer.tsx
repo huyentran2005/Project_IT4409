@@ -299,7 +299,11 @@ export function ProjectSettingsDrawer({ project, documents, onMembersChange, onU
               <div className="settings-section-title"><div><h2>Tài liệu dự án</h2><p>Tài liệu dùng chung cho các thành viên</p></div><button className="primary-button" disabled={!canManageDocuments || uploading} title={canManageDocuments ? 'Tải tài liệu lên' : 'Bạn không có quyền quản lý tài liệu'} onClick={() => fileInput.current?.click()}><Icon name="upload" size={15} />{uploading ? 'Đang tải lên...' : 'Tải lên'}</button><input ref={fileInput} type="file" hidden onChange={(event) => upload(event.target.files?.[0])} /></div>
               {documentError && <p className="auth-error" role="alert">{documentError}</p>}
               <div className="document-list">
-               {documents.map((document) => <div className="document-row" key={document.id}><span className="document-icon"><Icon name="file" size={18} /></span><div><strong>{document.name}</strong><span>{document.type} · {document.size} · {document.updatedBy}{onDownload && <> · <button type="button" onClick={() => void download(document)}>Tải xuống</button></>}</span></div><time>{new Intl.DateTimeFormat('vi-VN').format(new Date(document.updatedAt))}</time></div>)}
+               {documents.map((document) => {
+                 const processingLabels = { uploaded: 'Đã tải lên', queued: 'Đang chờ xử lý', processing: 'Đang xử lý', completed: 'Đã xử lý', failed: 'Xử lý lỗi', unsupported: 'Chưa hỗ trợ xử lý' }
+                 return <div className="document-row" key={document.id}><span className="document-icon"><Icon name="file" size={18} /></span><div><strong>{document.name}</strong><span>{document.type} · {document.size} · {document.updatedBy} · {processingLabels[document.processingStatus]}{document.processingError && <> · {document.processingError}</>}{onDownload && <> · <button type="button" onClick={() => void download(document)}>Tải xuống</button></>}</span></div><time>{new Intl.DateTimeFormat('vi-VN').format(new Date(document.updatedAt))}</time></div>
+               }
+               )}
               </div>
             </section>
           )}
