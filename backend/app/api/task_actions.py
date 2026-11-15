@@ -10,7 +10,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.schemas.task import (
     CommentRequest, MoveTaskRequest, ReviewerRequest, TaskCommentSchema, TaskResponse,
-    TimeEntryRequest, TimesheetEntrySchema, UpdateTaskRequest, comment_to_response, time_entry_to_response,
+    TimeEntryRequest, TimesheetEntrySchema, UpdateTaskRequest, comment_to_response, time_entry_to_response, task_to_response,
 )
 from app.services import task_actions
 from app.services.task_service import TaskServiceError
@@ -28,6 +28,12 @@ def action_transaction(db: Session):
     except Exception:
         db.rollback()
         raise
+
+
+@router.get("/{task_id}", response_model=TaskResponse)
+def read_task(task_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    with action_transaction(db):
+        return task_to_response(task_actions.get_task(db, task_id, user))
 
 
 @router.patch("/{task_id}", response_model=TaskResponse)

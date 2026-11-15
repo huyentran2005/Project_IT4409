@@ -15,6 +15,7 @@ from app.models.project_member import ProjectMember
 from app.models.project_role import Permission, ProjectRole, ProjectRolePermission
 from app.models.task import ActivityLog, Task, TaskAssignee, TimeEntry, TaskComment
 from app.models.user import User
+from app.models.notification import Notification, NotificationSettings
 
 
 class ActivityLogApiTests(unittest.TestCase):
@@ -23,7 +24,8 @@ class ActivityLogApiTests(unittest.TestCase):
             "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
         )
         for model in (User, Project, Permission, ProjectRole, ProjectRolePermission,
-                      ProjectMember, Status, Task, TaskAssignee, ActivityLog, TimeEntry, TaskComment):
+                      ProjectMember, Status, Task, TaskAssignee, ActivityLog, TimeEntry, TaskComment,
+                      Notification, NotificationSettings):
             model.__table__.create(self.engine)
         self.db = sessionmaker(bind=self.engine)()
         app.dependency_overrides[get_db] = lambda: self.db

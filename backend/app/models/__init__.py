@@ -1,4 +1,5 @@
 from app.db.session import Base
+from app.models.notification import Notification, NotificationSettings
 from app.models.user import User
 from app.models.oauth_account import OAuthAccount
 from app.models.auth_session import AuthSession
@@ -15,6 +16,8 @@ from app.models.project_content import Meeting, MeetingAttendee, ProjectDocument
 from app.models.task import Task, TaskAssignee, ActivityLog, TimeEntry, TaskComment
 
 __all__ = [
+    "Notification",
+    "NotificationSettings",
     "Base",
     "User",
     "OAuthAccount",

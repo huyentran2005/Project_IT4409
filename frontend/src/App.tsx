@@ -14,11 +14,13 @@ import { OverviewPage } from './pages/OverviewPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { InvitationPage } from './pages/InvitationPage'
 import { authApi, type LoginPayload, type RegisterPayload, type SsoProvider } from './services/authApi'
+import { taskApi } from './services/taskApi'
+import type { AppNotification } from './services/notificationApi'
 import { getTaskAssignees, type Task, type TaskPropertiesUpdate, type TaskStatus, type TimeEntryInput, type UserSummary } from './types/task'
 
 function App() {
   const [authenticated, setAuthenticated] = useState(() => localStorage.getItem('taskflow-authenticated') === 'true')
-  const { board, projects, columns, query, setQuery, filter, setFilter, loading, selectProject, createProject, moveTask, addTask, deleteTask, updateProjectMembers, logTime, addComment, updateReviewer, updateProperties } = useBoard('p-01', authenticated)
+  const { board, projects, columns, query, setQuery, filter, setFilter, loading, selectProject, loadProject, createProject, moveTask, addTask, deleteTask, updateProjectMembers, logTime, addComment, updateReviewer, updateProperties } = useBoard('p-01', authenticated)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [pendingTaskMove, setPendingTaskMove] = useState<{ taskId: string; status: TaskStatus } | null>(null)
   const [creating, setCreating] = useState(false)
@@ -197,6 +199,18 @@ function App() {
     if (saved && canFinishMove) setPendingTaskMove(null)
     return saved
   }
+  const openNotification = async (notification: AppNotification) => {
+    if (!notification.taskId || !notification.projectId) return
+    await taskApi.getTask(notification.taskId)
+    const nextBoard = await loadProject(notification.projectId)
+    const task = nextBoard.columns.flatMap((column) => column.tasks).find((item) => item.id === notification.taskId)
+    if (!task) throw new Error('Công việc không còn tồn tại hoặc bạn không có quyền truy cập.')
+    setQuery('')
+    setFilter('all')
+    setActiveSection('Dự án')
+    setPendingTaskMove(null)
+    setSelectedTask(task)
+  }
   const openTask = (task: Task) => {
     setPendingTaskMove(null)
     setSelectedTask(task)
@@ -239,7 +253,7 @@ function App() {
     <div className={`app${dark ? ' app--dark' : ''}${sidebarHidden ? ' app--sidebar-hidden' : ''}`}>
       <AppSidebar open={sidebarOpen} activeSection={activeSection} activeProjectId={board.project.id} projects={projects} onNavigate={(section) => { setActiveSection(section); setFilter(section === 'Công việc của tôi' ? 'mine' : 'all'); setSidebarOpen(false) }} onSelectProject={selectProject} onCreateProject={() => setCreatingProject(true)} onToggleHidden={() => setDesktopSidebarHidden(true)} onClose={() => setSidebarOpen(false)} />
       <div className="app__content">
-        <TopBar projectName={activeSection === 'Hồ sơ' ? 'Hồ sơ cá nhân' : board.project.name} query={query} onQueryChange={setQuery} onCreate={() => setCreating(true)} onMenu={() => { if (window.matchMedia('(max-width: 900px)').matches) setSidebarOpen(true); else setDesktopSidebarHidden(false) }} onToggleTheme={() => setDark((value) => !value)} onProfile={() => setActiveSection('Hồ sơ')} onLogout={logout} />
+        <TopBar projectName={activeSection === 'Hồ sơ' ? 'Hồ sơ cá nhân' : board.project.name} query={query} onQueryChange={setQuery} onCreate={() => setCreating(true)} onMenu={() => { if (window.matchMedia('(max-width: 900px)').matches) setSidebarOpen(true); else setDesktopSidebarHidden(false) }} onToggleTheme={() => setDark((value) => !value)} onProfile={() => setActiveSection('Hồ sơ')} onLogout={logout} onOpenNotification={openNotification} />
         {loading && <div className="loading-state">Đang tải dữ liệu...</div>}
         {!loading && activeSection === 'Tổng quan' && <OverviewPage board={board} onOpenProject={() => setActiveSection('Dự án')} onOpenMyTasks={() => setActiveSection('Công việc của tôi')} onOpenTask={openTask} />}
         {!loading && activeSection === 'Công việc của tôi' && <MyTasksPage board={board} onOpenTask={openTask} />}

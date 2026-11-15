@@ -2,6 +2,9 @@ import type { BoardData, CreateTaskInput, Task, TaskComment, TaskPropertiesUpdat
 import { apiRequest } from './apiClient'
 
 export const taskApi = {
+  getTask(taskId: string) {
+    return apiRequest<Task>(`/api/tasks/${taskId}`)
+  },
   getBoard(projectId: string) {
     return apiRequest<BoardData>(`/api/projects/${projectId}/board`)
   },

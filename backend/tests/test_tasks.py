@@ -11,6 +11,7 @@ from app.main import app
 from app.db.session import get_db
 from app.core.security import create_access_token
 from app.models.user import User
+from app.models.notification import Notification, NotificationSettings
 from app.models.project import Project, Status
 from app.models.project_role import Permission, ProjectRole, ProjectRolePermission
 from app.models.project_member import ProjectMember
@@ -42,6 +43,8 @@ class TaskApiFixture(unittest.TestCase):
             ActivityLog.__table__,
             TimeEntry.__table__,
             TaskComment.__table__,
+            Notification.__table__,
+            NotificationSettings.__table__,
         ]
         for table in tables:
             table.create(bind=self.engine, checkfirst=True)

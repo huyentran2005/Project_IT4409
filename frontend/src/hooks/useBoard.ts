@@ -93,6 +93,14 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
   const moveTask = async (taskId: string, nextStatus: TaskStatus, reviewer?: UserSummary, properties?: TaskPropertiesUpdate) =>
     applySavedTask(await taskApi.moveTask(taskId, nextStatus, 0, reviewer?.id, properties))
 
+  const loadProject = async (nextProjectId: string) => {
+    const nextBoard = await taskApi.getBoard(nextProjectId)
+    boardCache.current[nextProjectId] = nextBoard
+    setBoard(nextBoard)
+    setProjects((current) => [...current.filter((item) => item.id !== nextProjectId), nextBoard.project])
+    return nextBoard
+  }
+
   const selectProject = (nextProjectId: string) => {
     if (nextProjectId === board.project.id) return
     boardCache.current[board.project.id] = board
@@ -191,5 +199,5 @@ export function useBoard(projectId = 'p-01', authenticated = true) {
     }),
   })), [activeUserId, board.columns, filter, query])
 
-  return { board, projects, columns: filteredColumns, query, setQuery, filter, setFilter, loading, selectProject, createProject, moveTask, addTask, deleteTask, updateProjectMembers, logTime, addComment, updateReviewer, updateProperties }
+  return { board, projects, columns: filteredColumns, query, setQuery, filter, setFilter, loading, selectProject, loadProject, createProject, moveTask, addTask, deleteTask, updateProjectMembers, logTime, addComment, updateReviewer, updateProperties }
 }

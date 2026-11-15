@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { Avatar } from '../ui/Avatar'
 import { Icon } from '../ui/Icon'
 import { getStoredUser } from '../../utils/session'
+import { NotificationMenu } from './NotificationMenu'
+import type { AppNotification } from '../../services/notificationApi'
 
 interface TopBarProps {
   projectName: string
@@ -12,10 +14,10 @@ interface TopBarProps {
   onToggleTheme: () => void
   onProfile: () => void
   onLogout: () => void
+  onOpenNotification: (notification: AppNotification) => Promise<void>
 }
 
-export function TopBar({ projectName, query, onQueryChange, onCreate, onMenu, onToggleTheme, onProfile, onLogout }: TopBarProps) {
-  const [notificationsOpen, setNotificationsOpen] = useState(false)
+export function TopBar({ projectName, query, onQueryChange, onCreate, onMenu, onToggleTheme, onProfile, onLogout, onOpenNotification }: TopBarProps) {
   const [accountOpen, setAccountOpen] = useState(false)
   const displayUser = getStoredUser()
   return (
@@ -29,7 +31,7 @@ export function TopBar({ projectName, query, onQueryChange, onCreate, onMenu, on
       </label>
       <div className="topbar__actions">
         <button className="icon-button" onClick={onToggleTheme} aria-label="Đổi giao diện"><Icon name="sun" /></button>
-        <div className="notification-menu"><button className="icon-button notification-button" onClick={() => setNotificationsOpen((value) => !value)} aria-label="Thông báo"><Icon name="bell" /></button>{notificationsOpen && <div className="notification-popover"><header><strong>Thông báo</strong><button onClick={() => setNotificationsOpen(false)}><Icon name="close" size={14} /></button></header><div className="view-empty">Chưa có thông báo.</div></div>}</div>
+        <NotificationMenu key={displayUser.id} onOpenTask={onOpenNotification} />
         <button className="create-button" onClick={onCreate}><Icon name="plus" size={17} />Tạo công việc</button>
         <div className="account-menu"><button className="account-trigger" onClick={() => setAccountOpen((value) => !value)}><Avatar user={displayUser} size={34} /><span>{displayUser.name}</span><Icon name="chevron" size={14} /></button>{accountOpen && <div className="account-popover">
           <header><Avatar user={displayUser} size={45} /><div><strong>{displayUser.name}</strong><small>{displayUser.email}</small><i>THÀNH VIÊN</i></div></header>

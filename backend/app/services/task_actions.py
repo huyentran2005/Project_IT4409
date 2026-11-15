@@ -17,6 +17,7 @@ from app.schemas.task import (
 )
 from app.services.auth_service import sanitize_ip
 from app.services.task_service import TaskServiceError, check_task_manage_permission
+from app.services.notification_service import notify_task
 
 
 def get_task(db: Session, task_id: uuid.UUID, user: User, *, write: bool = False) -> Task:
@@ -151,6 +152,7 @@ def update_task(db: Session, task_id: uuid.UUID, user: User, payload: UpdateTask
     if changes:
         description = f"đã chuyển trạng thái từ {before['status']} sang {after['status']}" if moving else "đã cập nhật công việc"
         record_activity(db, task, user, "updated", description, changes, client_ip)
+        notify_task(db, task, user, "task_status_changed" if moving else "task_updated", changes)
         task.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(task)
@@ -166,6 +168,7 @@ def add_time(db: Session, task_id: uuid.UUID, user: User, payload: TimeEntryRequ
     db.flush()
     record_activity(db, task, user, "logged_time", "đã ghi nhận thời gian làm việc",
                     payload.model_dump(mode="json"), client_ip, entity_type="timesheet", entity_id=entry.id)
+    notify_task(db, task, user, "task_time_logged")
     db.commit()
     db.refresh(entry)
     return time_entry_to_response(entry)
@@ -178,6 +181,7 @@ def add_comment(db: Session, task_id: uuid.UUID, user: User, payload: CommentReq
     db.flush()
     record_activity(db, task, user, "updated", "đã thêm bình luận",
                     {"comment": {"old": None, "new": {"id": str(comment.id), "body": comment.body}}}, client_ip)
+    notify_task(db, task, user, "task_comment")
     db.commit()
     db.refresh(comment)
     return comment_to_response(comment)

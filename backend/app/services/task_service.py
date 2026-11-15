@@ -18,6 +18,7 @@ from app.schemas.task import (
 )
 from app.schemas.user import user_to_summary
 from app.services.auth_service import sanitize_ip
+from app.services.notification_service import notify_task
 
 
 class TaskServiceError(Exception):
@@ -545,6 +546,8 @@ def create_task(
     )
     db.add(log_entry)
 
+    notify_task(db, task, current_user, "task_created")
+
     db.commit()
     db.refresh(task)
 
@@ -599,5 +602,7 @@ def delete_task(
         ip_address=sanitize_ip(client_ip),
     )
     db.add(log_entry)
+
+    notify_task(db, task, current_user, "task_deleted")
 
     db.commit()

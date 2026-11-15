@@ -8,6 +8,7 @@ from app.api.auth import router as auth_router
 from app.api.project_content import router as project_content_router
 from app.api.tasks import router as tasks_router
 from app.api.task_actions import router as task_actions_router
+from app.api.notifications import router as notifications_router
 from app.api.project_invitations import (
     invitation_router,
     router as project_invitation_router,
@@ -44,6 +45,7 @@ app.include_router(invitation_router, prefix="/api")
 app.include_router(project_content_router, prefix="/api")
 app.include_router(tasks_router, prefix="/api")
 app.include_router(task_actions_router, prefix="/api")
+app.include_router(notifications_router, prefix="/api")
 
 
 @app.get("/health")
