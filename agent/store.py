@@ -164,7 +164,8 @@ class VectorStore:
         )
 
     def search(
-        self, question: str, top_k: int, collection_name: str | None = None
+        self, question: str, top_k: int, collection_name: str | None = None,
+        source_filter: list[str] | None = None,
     ) -> list[dict]:
         """Tìm dense và native BM25 rồi hợp nhất thứ hạng bằng RRF."""
         collection = collection_name or settings.collection
@@ -181,6 +182,9 @@ class VectorStore:
                 ),
             ],
             query=models.FusionQuery(fusion=models.Fusion.RRF),
+            query_filter=(models.Filter(must=[models.FieldCondition(
+                key="source", match=models.MatchAny(any=source_filter)
+            )]) if source_filter else None),
             limit=candidate_k,
             with_payload=True,
         )

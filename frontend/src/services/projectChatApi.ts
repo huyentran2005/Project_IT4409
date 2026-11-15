@@ -39,10 +39,10 @@ export const projectChatApi = {
       `/api/projects/${projectId}/chatbot/history/${sessionId}`,
     )
   },
-  ask(projectId: string, question: string, sessionId?: string) {
+  ask(projectId: string, question: string, sessionId?: string, documentIds: string[] = []) {
     return apiRequest<AskResponse>(`/api/projects/${projectId}/chatbot/ask`, {
       method: 'POST',
-      body: JSON.stringify({ question, session_id: sessionId }),
+      body: JSON.stringify({ question, session_id: sessionId, document_ids: documentIds }),
     })
   },
   reset(projectId: string) {

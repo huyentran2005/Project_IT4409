@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from pathlib import Path
 
 import httpx
@@ -37,11 +38,14 @@ async def _call_llm(prompt: str) -> str:
             raise ValueError("LLM_PROVIDER chỉ nhận 'gemini' hoặc 'openrouter'")
         response.raise_for_status()
         data = response.json()
-        return (
+        content = (
             data["candidates"][0]["content"]["parts"][0]["text"]
             if settings.llm_provider == "gemini"
             else data["choices"][0]["message"]["content"]
         )
+        if not isinstance(content, str) or not content.strip():
+            raise ValueError("LLM trả về nội dung rỗng; kiểm tra model/cấu hình API.")
+        return content
 
 
 async def analyze_question(
@@ -83,8 +87,8 @@ def build_prompt(
 ) -> str:
     """Tạo prompt có đánh số context để LLM trích nguồn."""
     evidence = "\n\n".join(
-        f"[{index}] {item['text']}\nNguồn: {item.get('source_name') or Path(item['source']).name}, trang: {item.get('page') or 'N/A'}"
-        for index, item in enumerate(contexts, 1)
+        f"{item['text']}\nTài liệu: {item.get('source_name') or Path(item['source']).name}, trang: {item.get('page') or 'N/A'}"
+        for item in contexts
     )
     breakdown = ""
     if sub_questions and len(sub_questions) > 1:
@@ -100,7 +104,8 @@ def build_prompt(
         "Bạn là trợ lý hỏi đáp tài liệu. Chỉ dùng NGỮ CẢNH dưới đây; nếu thiếu dữ liệu hãy nói rõ. "
         "Lịch sử chỉ giúp hiểu câu hỏi tiếp nối; mọi kết luận phải được hỗ trợ bởi NGỮ CẢNH hiện tại. "
         "Trả lời tiếng Việt ngắn gọn, bỏ câu mở đầu rườm rà. Dùng Markdown chuẩn: tiêu đề, đoạn văn, "
-        "danh sách gạch đầu dòng và chữ đậm khi phù hợp; mỗi ý chính nằm trên một dòng. Trích nguồn dạng [1], [2]. "
+        "danh sách gạch đầu dòng và chữ đậm khi phù hợp; mỗi ý chính nằm trên một dòng. "
+        "Không chèn số trích dẫn dạng [n] vào cuối câu hoặc đoạn; nguồn được hiển thị riêng bên dưới câu trả lời. "
         "Dùng ký tự mũi tên Unicode (→, ←, ↔), không viết mũi tên bằng LaTeX hoặc ký hiệu $. "
         "Không escape các ký hiệu Markdown và không bọc toàn bộ câu trả lời trong code block.\n\n"
         f"{conversation}CÂU HỎI: {question}\n\n{breakdown}NGỮ CẢNH:\n{evidence}"
@@ -115,4 +120,5 @@ async def generate_answer(
 ) -> str:
     """Gọi Gemini hoặc OpenRouter để sinh câu trả lời từ context."""
     prompt = build_prompt(question, contexts, sub_questions, history)
-    return await _call_llm(prompt)
+    answer = await _call_llm(prompt)
+    return re.sub(r"\s*\[\d+\](?=\s*(?:\n|$))", "", answer)

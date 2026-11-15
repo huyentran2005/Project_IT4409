@@ -3,6 +3,8 @@ import { projectChatApi, type ProjectChatMessage, type ProjectChatSessionSummary
 import { Icon } from '../ui/Icon'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { projectApi } from '../../services/projectApi'
+import type { ProjectDocument } from '../../types/project'
 
 interface ProjectChatWidgetProps {
   projectId: string
@@ -20,6 +22,7 @@ const formatAnswer = (content: string) => content
   .replace(/\\+rightarrow/g, '→')
   .replace(/\\+leftarrow/g, '←')
   .replace(/\\+leftrightarrow/g, '↔')
+  .replace(/\s*\[\d+\](?=\s*(?:$|\n))/g, '')
 
 export function ProjectChatWidget({ projectId, projectName }: ProjectChatWidgetProps) {
   const [open, setOpen] = useState(false)
@@ -28,6 +31,8 @@ export function ProjectChatWidget({ projectId, projectName }: ProjectChatWidgetP
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ProjectChatMessage[]>([])
   const [question, setQuestion] = useState('')
+  const [documents, setDocuments] = useState<ProjectDocument[]>([])
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([])
   const [sending, setSending] = useState(false)
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [error, setError] = useState('')
@@ -43,7 +48,18 @@ export function ProjectChatWidget({ projectId, projectName }: ProjectChatWidgetP
     setSessionId(null)
     setMessages([])
     setShowHistory(false)
+    setDocuments([])
+    setSelectedDocumentIds([])
   }, [projectId])
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    projectApi.getDocuments(projectId)
+      .then((items) => { if (!cancelled) setDocuments(items) })
+      .catch(() => { if (!cancelled) setDocuments([]) })
+    return () => { cancelled = true }
+  }, [open, projectId])
 
   useEffect(() => {
     if (!open) return
@@ -130,7 +146,7 @@ export function ProjectChatWidget({ projectId, projectName }: ProjectChatWidgetP
       createdAt: new Date().toISOString(),
     }])
     try {
-      const result = await projectChatApi.ask(projectId, text, sessionId ?? undefined)
+      const result = await projectChatApi.ask(projectId, text, sessionId ?? undefined, selectedDocumentIds)
       setSessionId(result.sessionId)
       setMessages((current) => [
         ...current.filter((message) => !message.id.startsWith('pending-')),
@@ -162,6 +178,27 @@ export function ProjectChatWidget({ projectId, projectName }: ProjectChatWidgetP
             </div>
           </header>
           <div className="project-chat__scope">Câu trả lời chỉ dựa trên tài liệu của dự án này</div>
+          <div className="project-chat__document-scope">
+            <span>Phạm vi tài liệu</span>
+            <div className="project-chat__document-list" role="group" aria-label="Chọn tài liệu để hỏi">
+              {documents.filter((document) => document.processingStatus === 'completed').map((document) => (
+                <label className={`project-chat__document-option ${selectedDocumentIds.includes(document.id) ? 'is-selected' : ''}`} key={document.id}>
+                  <input
+                    type="checkbox"
+                    checked={selectedDocumentIds.includes(document.id)}
+                    onChange={(event) => setSelectedDocumentIds((current) => event.target.checked
+                      ? [...current, document.id]
+                      : current.filter((id) => id !== document.id))}
+                    disabled={sending}
+                  />
+                  <span title={document.name}>{document.name}</span>
+                </label>
+              ))}
+              {documents.every((document) => document.processingStatus !== 'completed') && <small>Chưa có tài liệu nào xử lý xong.</small>}
+            </div>
+            <small>{selectedDocumentIds.length ? `Đang giới hạn ${selectedDocumentIds.length} tài liệu` : 'Không chọn: tìm trong tất cả tài liệu đã xử lý'}</small>
+            {selectedDocumentIds.length > 0 && <button type="button" className="project-chat__all-documents" onClick={() => setSelectedDocumentIds([])} disabled={sending}>Hỏi tất cả tài liệu</button>}
+          </div>
 
           {showHistory ? (
             <div className="project-chat__history">

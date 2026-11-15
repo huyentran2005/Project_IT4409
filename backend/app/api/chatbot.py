@@ -12,10 +12,31 @@ from agent.store import project_collection_name, store
 from app.api.project_content import ProjectAccess, project_permission
 from app.db.session import get_db
 from app.models.project_chat import ProjectChatMessage, ProjectChatSession
+from app.models.project_content import ProjectDocument
 from app.schemas.project_chat import ProjectChatAskRequest
 
 router = APIRouter(prefix="/chatbot", tags=["document chatbot"])
 project_router = APIRouter(prefix="/projects/{project_id}/chatbot", tags=["project document chatbot"])
+
+
+def _sources_out(contexts: list[dict]) -> list[dict]:
+    """Trả mỗi tài liệu/trang một lần, theo thứ tự độ liên quan."""
+    sources = []
+    seen: set[tuple[str, int | str | None]] = set()
+    for item in contexts:
+        file_name = item.get("source_name") or item.get("file") or Path(item.get("source") or "").name
+        page = item.get("page")
+        identity = (item.get("source") or file_name, page)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        sources.append({
+            "file": file_name,
+            "page": page,
+            "headings": item.get("headings"),
+            "score": item.get("score"),
+        })
+    return sources
 
 
 @router.get("/health")
@@ -38,16 +59,10 @@ async def ask(request: AskRequest) -> dict:
     """Hybrid search tài liệu và sinh câu trả lời có dẫn nguồn."""
     try:
         result = await answer_question(request.question, request.top_k)
-        sources = [
-            {
-                "file": Path(item["source"]).name,
-                "page": item.get("page"),
-                "headings": item.get("headings"),
-                "score": item["score"],
-            }
-            for item in result.pop("contexts", [])
-        ]
+        sources = _sources_out(result.pop("contexts", []))
         return {**result, "sources": sources}
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -88,23 +103,33 @@ async def ask_project_documents(
         ]
 
     try:
+        source_filter = None
+        if request.document_ids:
+            documents = (
+                db.query(ProjectDocument)
+                .filter(
+                    ProjectDocument.id.in_(request.document_ids),
+                    ProjectDocument.project_id == access.project_id,
+                    ProjectDocument.deleted_at.is_(None),
+                    ProjectDocument.processing_status == "completed",
+                )
+                .all()
+            )
+            if len(documents) != len(set(request.document_ids)):
+                raise HTTPException(status_code=400, detail="Có tài liệu chưa xử lý xong hoặc không thuộc dự án.")
+            source_filter = [f"project-document:{doc.id}" for doc in documents]
         result = await answer_question(
             request.question,
             request.top_k,
             collection_name=project_collection_name(str(access.project_id)),
             history=history,
+            source_filter=source_filter,
         )
-        sources = [
-            {
-                "file": item.get("source_name") or Path(item["source"]).name,
-                "page": item.get("page"),
-                "headings": item.get("headings"),
-                "score": item["score"],
-            }
-            for item in result.pop("contexts", [])
-        ]
+        sources = _sources_out(result.pop("contexts", []))
         if not sources:
             result["answer"] = "Dự án chưa có tài liệu phù hợp đã được xử lý. Hãy tải tài liệu PDF hoặc DOCX lên trước."
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -151,7 +176,7 @@ def _chat_message_out(message: ProjectChatMessage) -> dict:
         "id": str(message.id),
         "role": message.role,
         "content": message.content,
-        "sources": message.sources or [],
+        "sources": _sources_out(message.sources or []),
         "createdAt": message.created_at.isoformat(),
     }
 
