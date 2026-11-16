@@ -11,6 +11,7 @@ import { CalendarView } from '../components/views/CalendarView'
 import { ProgressView } from '../components/views/ProgressView'
 import { TaskListView } from '../components/views/TaskListView'
 import { SystemLogView } from '../components/views/SystemLogView'
+import { MemberEvaluationView } from '../components/views/MemberEvaluationView'
 import { Avatar } from '../components/ui/Avatar'
 import { Icon } from '../components/ui/Icon'
 import { ProjectChatWidget } from '../components/chat/ProjectChatWidget'
@@ -32,7 +33,7 @@ const filters: { id: BoardFilter; label: string }[] = [
   { id: 'priority', label: 'Ưu tiên cao' }, { id: 'due-soon', label: 'Sắp đến hạn' },
 ]
 
-type ProjectView = 'board' | 'list' | 'calendar' | 'progress' | 'activity'
+type ProjectView = 'board' | 'list' | 'calendar' | 'progress' | 'activity' | 'evaluation'
 
 export function BoardPage({ board, columns, filter, onFilter, onOpenTask, onMoveTask, onDeleteTask, onCreate, onMembersChange }: BoardPageProps) {
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -78,13 +79,13 @@ export function BoardPage({ board, columns, filter, onFilter, onOpenTask, onMove
       </section>
 
       <section className="view-tabs">
-        <div className="view-tabs__main"><button className={activeView === 'board' ? 'active' : ''} onClick={() => setActiveView('board')}><Icon name="grid" size={17} />Bảng</button><button className={activeView === 'list' ? 'active' : ''} onClick={() => setActiveView('list')}><Icon name="list" size={17} />Danh sách</button><button className={activeView === 'calendar' ? 'active' : ''} onClick={() => setActiveView('calendar')}><Icon name="calendar" size={17} />Lịch</button><button className={activeView === 'progress' ? 'active' : ''} onClick={() => setActiveView('progress')}><Icon name="chart" size={17} />Tiến độ</button><button className="meeting-tab" onClick={() => setMeetingOpen(true)}><Icon name="video" size={17} />Tạo meeting</button><button className={activeView === 'activity' ? 'active' : ''} onClick={() => setActiveView('activity')}><Icon name="list" size={17} />Nhật ký hệ thống</button></div>
+        <div className="view-tabs__main"><button className={activeView === 'board' ? 'active' : ''} onClick={() => setActiveView('board')}><Icon name="grid" size={17} />Bảng</button><button className={activeView === 'list' ? 'active' : ''} onClick={() => setActiveView('list')}><Icon name="list" size={17} />Danh sách</button><button className={activeView === 'calendar' ? 'active' : ''} onClick={() => setActiveView('calendar')}><Icon name="calendar" size={17} />Lịch</button><button className={activeView === 'progress' ? 'active' : ''} onClick={() => setActiveView('progress')}><Icon name="chart" size={17} />Tiến độ</button><button className="meeting-tab" onClick={() => setMeetingOpen(true)}><Icon name="video" size={17} />Tạo meeting</button><button className={activeView === 'activity' ? 'active' : ''} onClick={() => setActiveView('activity')}><Icon name="list" size={17} />Nhật ký hệ thống</button><button className={activeView === 'evaluation' ? 'active' : ''} onClick={() => setActiveView('evaluation')}><Icon name="chart" size={17} />Đánh giá</button></div>
         <button className="project-settings-button" onClick={() => setSettingsOpen(true)}><Icon name="settings" size={17} />Cấu hình dự án</button>
       </section>
 
       {meetingNotice && <div className="meeting-notice"><Icon name="check" size={16} /><span>{meetingNotice}</span><button onClick={() => setMeetingNotice('')} aria-label="Đóng thông báo"><Icon name="close" size={14} /></button></div>}
 
-      {activeView !== 'activity' && <section className="board-toolbar">
+      {activeView !== 'activity' && activeView !== 'evaluation' && <section className="board-toolbar">
         <div className="filter-tabs">{filters.map((item) => <button className={filter === item.id ? 'active' : ''} onClick={() => onFilter(item.id)} key={item.id}>{item.label}</button>)}</div>
         <div className="board-stats"><span><strong>{total}</strong> công việc</span><span><strong>{done}</strong> hoàn thành</span><div className="filter-menu"><button className={`filter-button ${filtersOpen ? 'active' : ''}`} onClick={() => setFiltersOpen((value) => !value)}><Icon name="filter" size={16} />Bộ lọc</button>{filtersOpen && <div className="filter-popover"><strong>Lọc công việc</strong>{filters.map((item) => <button className={filter === item.id ? 'active' : ''} onClick={() => { onFilter(item.id); setFiltersOpen(false) }} key={item.id}>{item.label}<span>{filter === item.id ? '✓' : ''}</span></button>)}</div>}</div></div>
       </section>}
@@ -94,6 +95,7 @@ export function BoardPage({ board, columns, filter, onFilter, onOpenTask, onMove
       {activeView === 'calendar' && <CalendarView tasks={visibleTasks} meetings={meetings} onOpenTask={onOpenTask} />}
       {activeView === 'progress' && <ProgressView columns={columns} tasks={visibleTasks} />}
       {activeView === 'activity' && <SystemLogView projectId={board.project.id} />}
+      {activeView === 'evaluation' && <MemberEvaluationView key={board.project.id} projectId={board.project.id} />}
       {settingsOpen && <ProjectSettingsDrawer project={board.project} documents={documents} onMembersChange={onMembersChange} onUpload={uploadDocument} onDownload={(document) => projectApi.downloadDocument(board.project.id, document)} onClose={() => setSettingsOpen(false)} />}
       {meetingOpen && <CreateMeetingModal project={board.project} onClose={() => setMeetingOpen(false)} onCreate={createMeeting} />}
       <ProjectChatWidget key={board.project.id} projectId={board.project.id} projectName={board.project.name} />
