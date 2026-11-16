@@ -105,3 +105,6 @@ temp/
 # ==========================================
 
 uploads/
+
+# CodeGraph index
+.codegraph/

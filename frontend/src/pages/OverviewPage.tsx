@@ -19,14 +19,13 @@ interface OverviewPageProps {
   projects: ProjectSummary[]
   allTasks: Task[]
   timesheetVersion: number
-  onLogTime: () => void
   onSelectProject: (projectId: string) => void
   onOpenProject: () => void
   onOpenMyTasks: () => void
   onOpenTask: (task: Task) => void
 }
 
-export function OverviewPage({ board, projects, allTasks, timesheetVersion, onLogTime, onSelectProject, onOpenProject, onOpenMyTasks, onOpenTask }: OverviewPageProps) {
+export function OverviewPage({ board, projects, allTasks, timesheetVersion, onSelectProject, onOpenProject, onOpenMyTasks, onOpenTask }: OverviewPageProps) {
   const displayUser = getStoredUser()
   const [summary, setSummary] = useState<TimesheetSummary | null>(null)
   useEffect(() => {
@@ -50,9 +49,9 @@ export function OverviewPage({ board, projects, allTasks, timesheetVersion, onLo
 
   return (
     <main className="dashboard-page">
-      <header className="dashboard-heading"><div><h1>Xin chào, {displayUser.name} <span>👋</span></h1><p>Tổng quan các dự án và công việc của bạn.</p></div><div className="dashboard-heading__actions"><button className="secondary-button" onClick={onLogTime}><Icon name="clock" size={16} />Log giờ</button></div></header>
+      <header className="dashboard-heading"><div><h1>Xin chào, {displayUser.name} <span>👋</span></h1><p>Tổng quan các dự án và công việc của bạn.</p></div></header>
 
-      {summary && <section className="dashboard-timelog" aria-label="Giờ log tuần này"><div><span>Giờ log tuần này</span><strong>{formatHours(summary.weekMinutes)}</strong>{summary.weekOvertimeMinutes > 0 && <small>trong đó OT {formatHours(summary.weekOvertimeMinutes)}</small>}</div><div><span>Hôm nay</span><strong>{formatHours(summary.todayMinutes)}</strong></div>{summary.missingDays > 0 ? <p className="warn">Thiếu log {summary.missingDays} ngày làm việc</p> : <small>Bạn đã log đủ các ngày làm việc trong tuần.</small>}</section>}
+      {summary && <section className="dashboard-timelog" aria-label="Giờ log tuần này"><div><span>Giờ log tuần này</span><strong>{formatHours(summary.weekMinutes)}</strong>{summary.weekOvertimeMinutes > 0 && <small>trong đó OT {formatHours(summary.weekOvertimeMinutes)}</small>}</div><div><span>Hôm nay</span><strong>{formatHours(summary.todayMinutes)}</strong></div>{summary.missingDays > 0 && <p className="warn">Thiếu log {summary.missingDays} ngày làm việc</p>}</section>}
 
       <section className="dashboard-stats">
         <article><span>Tổng dự án</span><i className="stat-icon stat-icon--blue"><Icon name="folder" size={21} /></i><strong>{projects.length}</strong><small>{activeProjectsCount} đang hoạt động</small></article>
