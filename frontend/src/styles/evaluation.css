@@ -1,0 +1,31 @@
+.evaluation-view { display: grid; gap: 14px; padding: 4px 0 24px; }
+.evaluation-view > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.evaluation-view h2 { margin: 0; font-size: 18px; }
+.evaluation-view > header p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+.evaluation-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.evaluation-filters label { display: grid; gap: 4px; color: var(--muted); font-size: 11px; font-weight: 600; }
+.evaluation-filters input { height: 34px; padding: 0 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text); font: inherit; }
+.evaluation-hint { margin: 0; color: var(--muted); font-size: 13px; }
+.evaluation-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.evaluation-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.evaluation-table th { padding: 10px 12px; text-align: left; color: var(--muted); font-size: 11px; font-weight: 700; background: var(--surface-subtle); white-space: nowrap; }
+.evaluation-table td { padding: 10px 12px; border-top: 1px solid var(--border); vertical-align: top; }
+.evaluation-table td small { display: block; margin-top: 2px; color: var(--muted-2); font-size: 11px; }
+.evaluation-table tr.selected td { background: var(--primary-soft); }
+.evaluation-member { display: inline-flex; align-items: center; gap: 8px; padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-weight: 600; cursor: pointer; text-align: left; }
+.evaluation-member:hover { color: var(--primary); }
+.evaluation-grade, .evaluation-result { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.evaluation-grade--excellent, .evaluation-result--on_time { color: #147a68; background: #e2f7f1; }
+.evaluation-grade--good { color: #2457c5; background: #e5eeff; }
+.evaluation-grade--pass { color: #8a6100; background: #fff3d1; }
+.evaluation-grade--needs_improvement, .evaluation-result--late { color: #b4372f; background: #fde8e6; }
+.evaluation-grade--insufficient, .evaluation-result--not_submitted { color: var(--muted); background: var(--surface-muted); }
+.evaluation-detail { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.evaluation-detail > header { display: flex; align-items: center; gap: 10px; }
+.evaluation-detail > header > div { flex: 1; min-width: 0; }
+.evaluation-detail h3 { margin: 0; font-size: 15px; }
+.evaluation-detail small { color: var(--muted); font-size: 12px; }
+.evaluation-rules { color: var(--muted); font-size: 13px; }
+.evaluation-rules summary { cursor: pointer; font-weight: 600; color: var(--text); }
+.evaluation-rules ul { margin: 8px 0 0; padding-left: 20px; line-height: 1.6; }
+@media (max-width: 640px) { .evaluation-view > header { flex-direction: column; } }
